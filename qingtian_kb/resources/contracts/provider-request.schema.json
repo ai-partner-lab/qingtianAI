@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qingtian-knowledge:provider-request:v1",
+  "title": "Qingtian Knowledge Provider Request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "query", "caller_id", "purpose"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "request_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "description": "Non-sensitive correlation label; secret/PII pattern checks are also applied at runtime."
+    },
+    "query": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "\\S",
+      "description": "Supplied over stdin. It is not accepted as a positional argv value."
+    },
+    "caller_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+      "description": "Non-sensitive audit label, not an authenticated identity."
+    },
+    "purpose": {"enum": ["human-research", "agent-context", "test"]},
+    "retrieval_modes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["approved", "candidate", "history"]},
+      "default": ["approved"]
+    },
+    "projects": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]{1,128}$",
+        "description": "Secret/PII pattern checks are additionally applied at runtime."
+      },
+      "default": []
+    },
+    "top_k": {"type": "integer", "minimum": 1, "maximum": 50, "default": 10}
+  }
+}

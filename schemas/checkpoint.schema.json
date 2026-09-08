@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qingtian-ai:schema:checkpoint:v1",
+  "title": "Qingtian Checkpoint v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "checkpoint_id", "task_id", "task_revision", "snapshot", "content_hash", "created_at"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "checkpoint_id": {"type": "string", "pattern": "^checkpoint_[A-Za-z0-9_-]+$"},
+    "task_id": {"type": "string", "pattern": "^task_[A-Za-z0-9_-]+$"},
+    "task_revision": {"type": "integer", "minimum": 1},
+    "snapshot": {"type": "object"},
+    "content_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "supersedes": {"type": ["string", "null"]},
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

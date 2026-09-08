@@ -1,0 +1,53 @@
+[project]
+name = "qingtian-ai"
+version = "0.2.0"
+description = "Portable AI control-plane and evidence-bound project knowledge runtime"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{name = "Qingtian AI contributors"}]
+keywords = ["ai", "orchestration", "knowledge-base", "evidence", "verification"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Documentation",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.urls]
+Homepage = "https://github.com/ai-partner-lab/qingtianAI"
+Documentation = "https://github.com/ai-partner-lab/qingtianAI/tree/main/docs"
+Repository = "https://github.com/ai-partner-lab/qingtianAI"
+Issues = "https://github.com/ai-partner-lab/qingtianAI/issues"
+Security = "https://github.com/ai-partner-lab/qingtianAI/security/policy"
+
+[project.optional-dependencies]
+pdf = ["pypdf>=6,<7"]
+dev = ["build>=1.2,<2"]
+
+[project.scripts]
+qingtian = "qingtian_core.cli:main"
+qingtian-kb = "qingtian_kb.cli:main"
+
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["qingtian_core*", "qingtian_kb*"]
+
+[tool.setuptools.package-data]
+qingtian_core = ["resources/*.json", "resources/*.md", "resources/*.txt", "resources/schemas/*.json"]
+qingtian_kb = ["resources/*.json", "resources/*.md", "resources/*.txt", "resources/contracts/*.json"]

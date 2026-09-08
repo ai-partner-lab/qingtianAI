@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "project_id": "qingtian-ai-example",
+  "project_root": "..",
+  "repositories": [
+    {
+      "alias": "qingtian-ai",
+      "path": ".",
+      "default_branch": "main"
+    }
+  ],
+  "checks": [
+    {
+      "id": "doctor",
+      "category": "environment",
+      "profiles": ["smoke", "full", "release"],
+      "command": ["./qingtian", "doctor"],
+      "cwd": ".",
+      "timeout_seconds": 30,
+      "side_effect": "none",
+      "network": false
+    },
+    {
+      "id": "unit-contracts",
+      "category": "contract",
+      "profiles": ["full", "release"],
+      "command": ["python3", "-m", "unittest", "discover", "-s", "tests", "-v"],
+      "cwd": ".",
+      "timeout_seconds": 120,
+      "side_effect": "none",
+      "network": false
+    },
+    {
+      "id": "release-scan",
+      "category": "security",
+      "profiles": ["release"],
+      "command": ["./qingtian", "scan", "--root", "."],
+      "cwd": ".",
+      "timeout_seconds": 30,
+      "side_effect": "none",
+      "network": false
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+# Qingtian runtime data. These paths may contain private knowledge and must
+# remain outside the reusable source repository.
+/vault/
+/.state/
+/.qingtian-knowledge-root
+/config/sources.json
+/source-archive/
+/receipts/
+/checkpoints/
+/runtime-data/
+
+# Local environments and Python caches.
+/.venv/
+/venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Coverage, packages, and build output.
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+/build/
+/dist/
+/release/
+
+# Local secrets and key material. Examples may be committed explicitly.
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Local databases, logs, and temporary files.
+*.db
+*.sqlite
+*.sqlite3
+*.log
+/logs/
+*.tmp
+*.swp
+*~
+
+# Editor and operating-system state.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.direnv/

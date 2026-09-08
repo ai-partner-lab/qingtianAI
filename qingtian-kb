@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+KB_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -n "${QINGTIAN_PYTHON:-}" ]; then
+  KB_PYTHON=$QINGTIAN_PYTHON
+elif [ -x "$KB_ROOT/.venv/bin/python3" ]; then
+  KB_PYTHON=$KB_ROOT/.venv/bin/python3
+else
+  KB_PYTHON=python3
+fi
+PYTHONPATH="$KB_ROOT${PYTHONPATH:+:$PYTHONPATH}" exec "$KB_PYTHON" -m qingtian_kb "$@"

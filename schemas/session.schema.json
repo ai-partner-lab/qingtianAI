@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qingtian-ai:schema:session:v1",
+  "title": "Qingtian Session v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "session_id", "task_id", "host_alias", "context_revision", "state"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "session_id": {"type": "string", "pattern": "^session_[A-Za-z0-9_-]+$"},
+    "task_id": {"type": "string", "pattern": "^task_[A-Za-z0-9_-]+$"},
+    "host_alias": {"type": "string", "minLength": 1},
+    "context_revision": {"type": "integer", "minimum": 1},
+    "state": {"enum": ["CREATED", "ACTIVE", "QUIESCING", "CHECKPOINTED", "CLOSED"]},
+    "source_checkpoint_id": {"type": ["string", "null"]},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"}
+  }
+}

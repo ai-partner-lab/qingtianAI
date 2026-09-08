@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qingtian-knowledge:provider-response:v1",
+  "title": "Qingtian Knowledge Provider Response",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_id",
+    "generated_at",
+    "caller_id",
+    "purpose",
+    "retrieval_modes",
+    "result_count",
+    "results",
+    "metadata_warnings",
+    "acl_enforced",
+    "production_integrated",
+    "classification_filter_only",
+    "query_persisted",
+    "query_echoed",
+    "query_privacy_scope",
+    "policy_notice"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "request_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "caller_id": {"type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$"},
+    "purpose": {"enum": ["human-research", "agent-context", "test"]},
+    "retrieval_modes": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"enum": ["approved", "candidate", "history"]}
+    },
+    "result_count": {"type": "integer", "minimum": 0},
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "knowledge_id",
+          "title",
+          "excerpt",
+          "source_plane",
+          "authority",
+          "authoritative",
+          "eligible_for_generation",
+          "usage_constraint",
+          "provenance"
+        ],
+        "properties": {
+          "knowledge_id": {
+            "type": "string",
+            "pattern": "^(?:kb:[A-Za-z0-9][A-Za-z0-9._:-]{0,127}|kb-sha256:[a-f0-9]{32})$"
+          },
+          "title": {"type": "string"},
+          "excerpt": {"type": "string"},
+          "source_plane": {"enum": ["human-vault", "sqlite-index"]},
+          "authority": {"enum": ["approved", "candidate", "history"]},
+          "authoritative": {"type": "boolean"},
+          "eligible_for_generation": {"type": "boolean"},
+          "usage_constraint": {"type": "string"},
+          "provenance": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "vault_locator",
+              "source_locators",
+              "source_revision",
+              "source_sha256",
+              "content_sha256",
+              "raw_knowledge_id",
+              "note_sha256",
+              "repo_branch",
+              "repo_head",
+              "canonical_ref",
+              "canonical_ref_remote_verified",
+              "authority_state",
+              "repository_authority_state",
+              "project",
+              "category",
+              "knowledge_status",
+              "evidence_level",
+              "claim_scope",
+              "review_status",
+              "reviewer",
+              "reviewed_at",
+              "review_due_at",
+              "conflict_status",
+              "freshness_status",
+              "privacy_classification",
+              "source_status",
+              "historical",
+              "updated_at"
+            ],
+            "properties": {
+              "vault_locator": {"type": "string"},
+              "source_locators": {"type": "array", "items": {"type": "string"}},
+              "source_revision": {"type": ["string", "null"]},
+              "source_sha256": {"type": ["string", "null"]},
+              "note_sha256": {"type": ["string", "null"]},
+              "content_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              "raw_knowledge_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+              "repo_branch": {"type": ["string", "null"]},
+              "repo_head": {"type": ["string", "null"]},
+              "canonical_ref": {"type": ["string", "null"]},
+              "canonical_ref_remote_verified": {"const": false},
+              "authority_state": {"type": "string"},
+              "repository_authority_state": {"type": ["string", "null"]},
+              "project": {"type": "string"},
+              "category": {"type": "string"},
+              "knowledge_status": {"enum": ["candidate", "curated", "disputed", "deprecated"]},
+              "evidence_level": {"enum": ["E0", "E1", "E2", "E3", "E4"]},
+              "claim_scope": {"type": "string"},
+              "review_status": {"enum": ["pending", "approved", "rejected", "not-required"]},
+              "reviewer": {"type": ["string", "null"]},
+              "reviewed_at": {"type": ["string", "null"]},
+              "review_due_at": {"type": ["string", "null"]},
+              "conflict_status": {"enum": ["none", "suspected", "confirmed", "resolving", "resolved"]},
+              "freshness_status": {"enum": ["current", "unknown", "stale", "review-due", "expired"]},
+              "privacy_classification": {"enum": ["P0-public", "P1-internal"]},
+              "source_status": {"type": "string"},
+              "historical": {"type": "boolean"},
+              "updated_at": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "metadata_warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "count"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"},
+          "count": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "acl_enforced": {"const": false},
+    "production_integrated": {"const": false},
+    "classification_filter_only": {"const": true},
+    "query_persisted": {"const": false},
+    "query_echoed": {"const": false},
+    "query_privacy_scope": {"type": "string"},
+    "policy_notice": {"type": "string"}
+  }
+}

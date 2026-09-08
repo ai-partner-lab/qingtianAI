@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "task_id": "task_example_001",
+  "project_id": "example-project",
+  "title": "Introduce Qingtian contracts",
+  "objective": "Adopt task, run, evidence, and knowledge boundaries in a new project.",
+  "scope": ["documentation", "synthetic tests"],
+  "acceptance": ["offline bootstrap passes", "no external side effects occur"],
+  "state": "DRAFT",
+  "revision": 1
+}

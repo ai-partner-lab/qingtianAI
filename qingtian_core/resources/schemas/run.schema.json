@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qingtian-ai:schema:run:v1",
+  "title": "Qingtian Run v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "run_id", "task_id", "session_id", "input_revision", "executor", "state"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "run_id": {"type": "string", "pattern": "^run_[A-Za-z0-9_-]+$"},
+    "task_id": {"type": "string", "pattern": "^task_[A-Za-z0-9_-]+$"},
+    "session_id": {"type": "string", "pattern": "^session_[A-Za-z0-9_-]+$"},
+    "input_revision": {"type": "integer", "minimum": 1},
+    "executor": {"type": "string", "minLength": 1},
+    "state": {"enum": ["PLANNED", "RUNNING", "SUCCEEDED", "FAILED", "INTERRUPTED", "UNKNOWN"]},
+    "external_operation_id": {"type": ["string", "null"]},
+    "idempotency_key": {"type": ["string", "null"]},
+    "request_hash": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"}
+  }
+}

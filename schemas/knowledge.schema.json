@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qingtian-ai:schema:knowledge:v1",
+  "title": "Qingtian Knowledge Record v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "knowledge_id", "project_id", "scope", "classification", "kind", "title", "content", "source", "evidence_label", "review_state", "content_hash"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "knowledge_id": {"type": "string", "pattern": "^knowledge_[A-Za-z0-9_-]+$"},
+    "project_id": {"type": "string", "minLength": 1},
+    "scope": {"type": "string", "minLength": 1},
+    "classification": {"enum": ["public", "internal", "confidential", "restricted"]},
+    "kind": {"enum": ["source", "decision", "observation", "procedure", "incident", "constraint"]},
+    "title": {"type": "string", "minLength": 1},
+    "content": {"type": "string", "minLength": 1},
+    "source": {"type": "string", "minLength": 1},
+    "source_revision": {"type": ["string", "null"]},
+    "evidence_label": {"enum": ["SOURCE", "OBSERVED", "REPORTED", "INFERRED", "MISSING"]},
+    "review_state": {"enum": ["unreviewed", "reviewed", "rejected", "superseded"]},
+    "valid_until": {"type": ["string", "null"], "format": "date-time"},
+    "content_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "updated_at": {"type": "string", "format": "date-time"}
+  }
+}

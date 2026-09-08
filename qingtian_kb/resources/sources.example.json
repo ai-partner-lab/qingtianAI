@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "workspace_root": "../..",
+  "vault_root": "../vault",
+  "state_db": "../.state/qingtian-kb.sqlite",
+  "max_text_bytes": 1048576,
+  "max_source_bytes": 33554432,
+  "hard_excluded_globs": [
+    "knowledge/**",
+    ".git/**",
+    "**/.git/**",
+    "**/.worktrees/**",
+    "**/.env",
+    "**/.env.*",
+    "**/*.key",
+    "**/*.pem",
+    "**/*.p12",
+    "**/*.pfx",
+    "**/*.db",
+    "**/*.sqlite",
+    "**/*.sqlite3",
+    "**/*.har",
+    "**/*.trace",
+    "**/credentials/**",
+    "**/secrets/**"
+  ],
+  "source_sets": [
+    {
+      "id": "project-documentation",
+      "root": ".",
+      "project": "project-template",
+      "category": "documentation",
+      "classification": "P1-internal",
+      "evidence_level": "E1",
+      "claim_scope": "historical-document",
+      "includes": [
+        "README*.md",
+        "docs/**/*.md",
+        "docs/**/*.pdf",
+        ".github/workflows/*.yml",
+        ".github/workflows/*.yaml"
+      ]
+    }
+  ],
+  "repositories": [],
+  "test_roots": [],
+  "global_excluded_parts": [
+    ".git",
+    ".venv",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "test-results",
+    "logs",
+    "__pycache__"
+  ]
+}

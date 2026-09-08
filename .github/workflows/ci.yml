@@ -1,0 +1,406 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-boundary:
+    name: Repository boundary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Reject private data, business residue, host paths, and key material
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import re
+          import subprocess
+
+          tracked = [
+              item
+              for item in subprocess.check_output(["git", "ls-files", "-z"])
+              .decode("utf-8")
+              .split("\0")
+              if item
+          ]
+          forbidden_roots = {
+              "vault", ".state", "source-archive", "receipts", "checkpoints",
+              "runtime-data", "release", ".venv", "venv", "build", "dist"
+          }
+          forbidden_suffixes = {
+              ".db", ".sqlite", ".sqlite3", ".key", ".pem", ".p12", ".pfx"
+          }
+          path_violations = []
+          for raw in tracked:
+              path = PurePosixPath(raw)
+              name = path.name
+              if (
+                  (path.parts and path.parts[0] in forbidden_roots)
+                  or raw == "config/sources.json"
+                  or raw == ".qingtian-knowledge-root"
+                  or name == ".env"
+                  or (name.startswith(".env.") and name != ".env.example")
+                  or path.suffix.lower() in forbidden_suffixes
+                  or "__pycache__" in path.parts
+                  or name.endswith((".pyc", ".pyo"))
+                  or Path(raw).is_symlink()
+              ):
+                  path_violations.append(raw)
+
+          business_terms = [
+              "xing" + "huo",
+              "星" + "火",
+              "peer" + "soft",
+              "cat2" + "bug",
+              "ns" + "fw",
+              "r" + "18",
+              "ai-partner" + "-lab/xing" + "huo",
+          ]
+          developer_paths = [
+              "/" + "Users" + "/" + "tab" + "/",
+              "/" + "home" + "/" + "tab" + "/",
+          ]
+          secret_patterns = {
+              "private-key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+              "aws-access-key": re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+              "aws-resource": re.compile(r"\barn:aws(?:-[a-z]+)?:[A-Za-z0-9_./:=+@-]+"),
+              "aws-ecr": re.compile(r"\b\d{12}\.dkr\.ecr\.[A-Za-z0-9-]+\.amazonaws\.com\b"),
+              "github-token": re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{24,}\b"),
+              "github-fine-grained-token": re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"),
+              "gitlab-token": re.compile(r"\bglpat-[A-Za-z0-9_-]{20,}\b"),
+              "npm-token": re.compile(r"\bnpm_[A-Za-z0-9]{30,}\b"),
+              "pypi-token": re.compile(r"\bpypi-AgEIcH[A-Za-z0-9_-]{40,}\b"),
+              "huggingface-token": re.compile(r"\bhf_[A-Za-z0-9]{30,}\b"),
+              "openai-key": re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
+              "anthropic-key": re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b"),
+              "slack-token": re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{10,}\b"),
+              "stripe-live-key": re.compile(r"\b[rs]k_live_[A-Za-z0-9]{16,}\b"),
+              "google-api-key": re.compile(r"\bAIza[A-Za-z0-9_-]{30,}\b"),
+              "sendgrid-key": re.compile(r"\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\b"),
+              "azure-storage-key": re.compile(r"\bAccountKey=[A-Za-z0-9+/=]{20,}"),
+              "jwt": re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
+              "bearer-token": re.compile(r"(?i)\bAuthorization\s*:\s*Bearer\s+[A-Za-z0-9._~+/-]{16,}"),
+              "password-url": re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://[^\s/:]+:[^\s/@]+@"),
+          }
+          content_violations = []
+          for raw in tracked:
+              try:
+                  text = Path(raw).read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+              folded = text.casefold()
+              for value in business_terms:
+                  if value.casefold() in folded:
+                      content_violations.append(f"business-term:{raw}")
+              for value in developer_paths:
+                  if value in text:
+                      content_violations.append(f"developer-path:{raw}")
+              for label, pattern in secret_patterns.items():
+                  if pattern.search(text):
+                      content_violations.append(f"{label}:{raw}")
+
+          violations = sorted(set(path_violations + content_violations))
+          if violations:
+              raise SystemExit(
+                  "Repository boundary violations:\n"
+                  + "\n".join(f"- {item}" for item in violations)
+              )
+          print(f"Checked {len(tracked)} tracked paths; repository boundary passed.")
+          PY
+
+  test:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    needs: repository-boundary
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install package and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[pdf,dev]'
+
+      - name: Run complete test suite
+        run: python -m unittest discover -s tests -v
+
+  package:
+    name: Distribution and installed CLI
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+
+      - name: Build wheel and source distribution
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install 'build>=1.2,<2'
+          python -m build
+
+      - name: Audit distribution contents
+        shell: bash
+        run: |
+          python - <<'PY'
+          from email.parser import BytesParser
+          from pathlib import Path, PurePosixPath
+          import tarfile
+          import zipfile
+
+          wheels = list(Path("dist").glob("*.whl"))
+          sdists = list(Path("dist").glob("*.tar.gz"))
+          if len(wheels) != 1 or len(sdists) != 1:
+              raise SystemExit("Expected exactly one wheel and one source distribution")
+
+          forbidden_parts = {
+              "vault", ".state", "source-archive", "receipts", "checkpoints",
+              "runtime-data", "release", "__pycache__", ".venv", "venv"
+          }
+          forbidden_names = {
+              "sources.json", ".env", ".DS_Store", ".qingtian-knowledge-root"
+          }
+
+          with zipfile.ZipFile(wheels[0]) as archive:
+              wheel_names = set(archive.namelist())
+              required_wheel = {
+                  "qingtian_core/__init__.py",
+                  "qingtian_core/cli.py",
+                  "qingtian_core/resources/schemas/task.schema.json",
+                  "qingtian_core/resources/schemas/verification-receipt.schema.json",
+                  "qingtian_kb/__init__.py",
+                  "qingtian_kb/cli.py",
+                  "qingtian_kb/resources/contracts/provider-request.schema.json",
+                  "qingtian_kb/resources/contracts/provider-response.schema.json",
+              }
+              missing = sorted(required_wheel - wheel_names)
+              if missing:
+                  raise SystemExit(f"Wheel is missing required files: {missing}")
+              metadata_name = next(
+                  name for name in wheel_names if name.endswith(".dist-info/METADATA")
+              )
+              metadata = BytesParser().parsebytes(archive.read(metadata_name))
+              if metadata["Name"] != "qingtian-ai" or metadata["Version"] != "0.2.0":
+                  raise SystemExit("Wheel metadata name/version mismatch")
+              if metadata["License-Expression"] != "Apache-2.0":
+                  raise SystemExit("Wheel metadata is missing the Apache-2.0 expression")
+              for root_schema in Path("schemas").glob("*.json"):
+                  packaged = f"qingtian_core/resources/schemas/{root_schema.name}"
+                  if archive.read(packaged) != root_schema.read_bytes():
+                      raise SystemExit(f"Core schema differs in wheel: {root_schema.name}")
+              for root_schema in Path("contracts").glob("*.schema.json"):
+                  packaged = f"qingtian_kb/resources/contracts/{root_schema.name}"
+                  if archive.read(packaged) != root_schema.read_bytes():
+                      raise SystemExit(f"Provider schema differs in wheel: {root_schema.name}")
+              for name in wheel_names:
+                  path = PurePosixPath(name)
+                  if forbidden_parts.intersection(path.parts) or path.name in forbidden_names:
+                      raise SystemExit(f"Private/generated path in wheel: {name}")
+
+          with tarfile.open(sdists[0], "r:gz") as archive:
+              members = [item for item in archive.getmembers() if item.isfile()]
+              if not members:
+                  raise SystemExit("Source distribution is empty")
+              roots = {PurePosixPath(item.name).parts[0] for item in members}
+              if len(roots) != 1:
+                  raise SystemExit("Source distribution has multiple roots")
+              root = next(iter(roots))
+              relative = {
+                  PurePosixPath(*PurePosixPath(item.name).parts[1:]).as_posix()
+                  for item in members
+              }
+              required_sdist = {
+                  ".gitattributes",
+                  ".github/workflows/ci.yml",
+                  ".gitignore",
+                  "CHANGELOG.md",
+                  "CONTRIBUTING.md",
+                  "LICENSE",
+                  "MANIFEST.in",
+                  "NOTICE",
+                  "README.md",
+                  "SECURITY.md",
+                  "config/sources.example.json",
+                  "contracts/provider-request.schema.json",
+                  "contracts/provider-response.schema.json",
+                  "docs/ADOPTION.md",
+                  "docs/ARCHITECTURE.md",
+                  "examples/project.adapter.json",
+                  "examples/task.json",
+                  "pyproject.toml",
+                  "qingtian",
+                  "qingtian-kb",
+                  "release-allowlist.json",
+                  "schemas/task.schema.json",
+                  "tests/test_cli.py",
+                  "tests/test_core_bundle.py",
+                  "tests/test_core_cli.py",
+                  "tests/test_core_contracts.py",
+                  "tests/test_core_provider.py",
+                  "tests/test_core_store.py",
+                  "tests/test_core_verification.py",
+                  "tests/test_engine.py",
+                  "tests/test_packaging.py",
+                  "tests/test_provider.py",
+              }
+              missing = sorted(required_sdist - relative)
+              if missing:
+                  raise SystemExit(f"Source distribution is missing files: {missing}")
+              source_tests = {
+                  path.as_posix() for path in Path("tests").rglob("test_*.py")
+              }
+              packaged_tests = {
+                  name for name in relative
+                  if name.startswith("tests/") and name.endswith(".py")
+              }
+              if packaged_tests != source_tests:
+                  raise SystemExit(
+                      "Source distribution test set differs from checkout: "
+                      f"missing={sorted(source_tests - packaged_tests)}, "
+                      f"extra={sorted(packaged_tests - source_tests)}"
+                  )
+              for name in relative:
+                  path = PurePosixPath(name)
+                  if forbidden_parts.intersection(path.parts) or path.name in forbidden_names:
+                      raise SystemExit(f"Private/generated path in source distribution: {name}")
+              if any(item.issym() or item.islnk() for item in archive.getmembers()):
+                  raise SystemExit("Source distribution contains a link")
+          print(f"Audited {wheels[0].name} and {sdists[0].name} ({root}).")
+          PY
+
+      - name: Smoke-test installed wheel outside source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          artifact=$(find "$PWD/dist" -maxdepth 1 -name '*.whl' -print -quit)
+          smoke_root=$(mktemp -d)
+          trap 'rm -rf "$smoke_root"' EXIT
+          python -m venv "$smoke_root/venv"
+          "$smoke_root/venv/bin/python" -m pip install --upgrade pip
+          "$smoke_root/venv/bin/python" -m pip install "$artifact"
+
+          cd "$smoke_root"
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian" doctor > doctor.json
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian" init --db "$smoke_root/control/control.db" > init.json
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian" demo --db "$smoke_root/control/control.db" > demo.json
+
+          mkdir -p "$smoke_root/project/docs" "$smoke_root/knowledge"
+          printf '%s\n' '# Synthetic project' 'An architecture decision uses bounded evidence.' > "$smoke_root/project/README.md"
+          printf '%s\n' '# Decision' 'The synthetic workflow records a checkpoint.' > "$smoke_root/project/docs/decision.md"
+          cd "$smoke_root/knowledge"
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian-kb" init \
+            --workspace "$smoke_root/project" --project wheel-smoke > init.json
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian-kb" doctor > doctor.json
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian-kb" plan > plan.json
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian-kb" ingest > ingest.json
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian-kb" validate > validate.json
+          printf '%s\n' '{"schema_version":"1.0","query":"architecture decision","caller_id":"wheel-smoke","purpose":"test","retrieval_modes":["history"]}' \
+            | env -u PYTHONPATH "$smoke_root/venv/bin/qingtian-kb" provider-query > provider.json
+
+          "$smoke_root/venv/bin/python" - <<'PY'
+          from importlib.resources import files
+          import json
+
+          for package, names in {
+              "qingtian_core.resources.schemas": [
+                  "task.schema.json", "verification-receipt.schema.json"
+              ],
+              "qingtian_kb.resources.contracts": [
+                  "provider-request.schema.json", "provider-response.schema.json"
+              ],
+          }.items():
+              root = files(package)
+              for name in names:
+                  json.loads(root.joinpath(name).read_text(encoding="utf-8"))
+          response = json.loads(open("provider.json", encoding="utf-8").read())
+          if response["result_count"] < 1:
+              raise SystemExit("Installed Knowledge Hub did not return ingested history")
+          if any(item["authoritative"] or item["eligible_for_generation"] for item in response["results"]):
+              raise SystemExit("Historical smoke data was incorrectly promoted")
+          PY
+
+      - name: Build, verify, extract, and test release allowlist bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          source_tests = {
+              path.as_posix() for path in Path("tests").rglob("test_*.py")
+          }
+          document = json.loads(
+              Path("release-allowlist.json").read_text(encoding="utf-8")
+          )
+          allowlisted_tests = {
+              path for path in document["paths"]
+              if path.startswith("tests/") and path.endswith(".py")
+          }
+          if allowlisted_tests != source_tests:
+              raise SystemExit(
+                  "Release allowlist test set differs from checkout: "
+                  f"missing={sorted(source_tests - allowlisted_tests)}, "
+                  f"extra={sorted(allowlisted_tests - source_tests)}"
+              )
+          PY
+          mkdir -p release
+          python -m qingtian_core bundle --root . --output release/qingtianAI.tar.gz
+          python -m qingtian_core bundle-verify --bundle release/qingtianAI.tar.gz
+          bundle_test_root=$(mktemp -d)
+          trap 'rm -rf "$bundle_test_root"' EXIT
+          bundle_source="$(
+            BUNDLE_TEST_ROOT="$bundle_test_root" python - <<'PY'
+          from pathlib import Path, PurePosixPath
+          import os
+          import tarfile
+
+          archive_path = Path("release/qingtianAI.tar.gz").resolve()
+          destination = Path(os.environ["BUNDLE_TEST_ROOT"]).resolve()
+          with tarfile.open(archive_path, "r:gz") as archive:
+              members = archive.getmembers()
+              roots = {
+                  PurePosixPath(member.name).parts[0]
+                  for member in members
+                  if PurePosixPath(member.name).parts
+              }
+              if len(roots) != 1:
+                  raise SystemExit(f"Bundle must have exactly one root: {sorted(roots)}")
+              archive.extractall(destination, filter="data")
+          print(destination / next(iter(roots)))
+          PY
+          )"
+          cd "$bundle_source"
+          test ! -e .qingtian-knowledge-root
+          test -f qingtian_kb/resources/knowledge-root-marker.txt
+          env -u PYTHONPATH python -m pip install -e '.[pdf,dev]'
+          env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 \
+            python -m unittest discover -s tests -v

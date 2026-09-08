@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qingtian-ai:schema:verification-receipt:v1",
+  "title": "Qingtian Verification Receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receipt_version", "adapter_id", "adapter_hash", "profile", "observed_at", "runtime", "execution_policy", "result", "checks", "receipt_hash"],
+  "properties": {
+    "receipt_version": {"const": 1},
+    "adapter_id": {"type": "string", "minLength": 1},
+    "adapter_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "profile": {"type": "string", "minLength": 1},
+    "observed_at": {"type": "string", "format": "date-time"},
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "implementation", "os"],
+      "properties": {
+        "python": {"type": "string", "minLength": 1},
+        "implementation": {"type": "string", "minLength": 1},
+        "os": {"type": "string", "minLength": 1}
+      }
+    },
+    "execution_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter_trusted", "shell", "environment", "filesystem_sandbox", "network_sandbox"],
+      "properties": {
+        "adapter_trusted": {"const": true},
+        "shell": {"const": false},
+        "environment": {"const": "minimal"},
+        "filesystem_sandbox": {"const": false},
+        "network_sandbox": {"const": false}
+      }
+    },
+    "result": {"enum": ["passed", "failed"]},
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "status", "exit_code", "duration_ms", "output_bytes", "output_sha256"],
+        "properties": {
+          "id": {"type": "string"},
+          "category": {"type": "string"},
+          "status": {"enum": ["passed", "failed"]},
+          "exit_code": {"type": "integer"},
+          "duration_ms": {"type": "integer", "minimum": 0},
+          "output_bytes": {"type": "integer", "minimum": 0},
+          "output_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "failure_kind": {"enum": ["timeout", "execution_error"]},
+          "output_tail": {"type": "string"}
+        }
+      }
+    },
+    "receipt_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

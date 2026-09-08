@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:qingtian-ai:schema:project-adapter:v1",
+  "title": "Qingtian Project Adapter v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "project_root", "repositories", "checks"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "project_id": {"type": "string", "minLength": 1},
+    "project_root": {"type": "string", "minLength": 1},
+    "repositories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["alias", "path", "default_branch"],
+        "properties": {
+          "alias": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "default_branch": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "profiles", "command", "cwd", "timeout_seconds", "side_effect", "network"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "category": {"type": "string", "minLength": 1},
+          "profiles": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "command": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "cwd": {"type": "string", "minLength": 1},
+          "timeout_seconds": {"type": "integer", "minimum": 1},
+          "side_effect": {"enum": ["none", "local", "external"]},
+          "network": {"type": "boolean"},
+          "include_output": {"type": "boolean", "default": false}
+        }
+      }
+    }
+  }
+}
