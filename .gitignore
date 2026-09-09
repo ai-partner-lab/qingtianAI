@@ -8,6 +8,11 @@
 /receipts/
 /checkpoints/
 /runtime-data/
+/.data/
+config/*.local.json
+*.sqlite3-*
+*.db-*
+*.pid
 
 # Local environments and Python caches.
 /.venv/

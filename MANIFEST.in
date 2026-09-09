@@ -13,9 +13,15 @@ include .gitattributes
 include .gitignore
 recursive-include .github *.yml
 recursive-include qingtian_core *.py *.json
+recursive-include qingtian_engine *.py *.json *.html *.css *.js
+recursive-include scripts *.py *.sh
+recursive-include qingtian_core/resources/demo *.html *.css *.js
 recursive-include qingtian_kb *.py *.json *.md *.txt
 recursive-include tests *.py
 recursive-include docs *.md
+recursive-include docs *.excalidraw
+recursive-include docs *.png
+recursive-include docs *.svg *.json *.py
 recursive-include contracts *.json *.md
 recursive-include config *.json *.md
 recursive-include examples *.json
@@ -26,6 +32,7 @@ prune source-archive
 prune receipts
 prune checkpoints
 prune runtime-data
+prune .data
 prune release
 prune .venv
 prune venv
@@ -40,5 +47,7 @@ prune .nox
 global-exclude __pycache__
 global-exclude *.py[cod]
 global-exclude *.egg-info
+global-exclude *.local.json *.pid *.sqlite3 *.sqlite3-wal *.sqlite3-shm *.db *.db-wal *.db-shm
 global-exclude .DS_Store
 exclude config/sources.json
+exclude config/*.local.json

@@ -35,8 +35,9 @@ jobs:
               if item
           ]
           forbidden_roots = {
-              "vault", ".state", "source-archive", "receipts", "checkpoints",
-              "runtime-data", "release", ".venv", "venv", "build", "dist"
+              "vault", ".state", ".data", "source-archive", "receipts", "checkpoints",
+              "runtime-data", "release", ".venv", "venv", "build", "dist",
+              "worktrees", "prompts", "raw-logs", "sessions"
           }
           forbidden_suffixes = {
               ".db", ".sqlite", ".sqlite3", ".key", ".pem", ".p12", ".pfx"
@@ -51,6 +52,11 @@ jobs:
                   or raw == ".qingtian-knowledge-root"
                   or name == ".env"
                   or (name.startswith(".env.") and name != ".env.example")
+                  or name.endswith(".local.json")
+                  or name.endswith(".pid") or ".pid." in name
+                  or name in {"instance.lock", "server.log"}
+                  or re.search(r"\.(?:db|sqlite|sqlite3)-(?:wal|shm|journal)$", name, re.I)
+                  or ".data" in path.parts
                   or path.suffix.lower() in forbidden_suffixes
                   or "__pycache__" in path.parts
                   or name.endswith((".pyc", ".pyo"))
@@ -144,12 +150,48 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e '.[pdf,dev]'
 
-      - name: Run complete test suite
+      - name: Run engine, Knowledge Hub, and legacy lab tests (including tests/atlas)
         run: python -m unittest discover -s tests -v
+
+      - name: Exercise the default credential-free engine entry point
+        shell: bash
+        run: |
+          qingtian selftest --output "$RUNNER_TEMP/engine-selftest.json"
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          receipt = json.loads((Path(os.environ["RUNNER_TEMP"]) / "engine-selftest.json").read_text())
+          assert receipt["status"] == "passed", receipt
+          assert receipt["scope"] == "synthetic-engine-selftest"
+          assert receipt["model_called"] is False
+          assert receipt["business_acceptance"] is False
+          assert receipt["legacy_tasks_imported"] == 0
+          assert receipt["checks"] and all(item["passed"] for item in receipt["checks"])
+          PY
+
+  browser-e2e:
+    name: Isolated legacy lab browser E2E
+    needs: repository-boundary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install optional browser runner
+        run: |
+          python -m pip install -e '.[browser]'
+          python -m playwright install --with-deps chromium
+      - name: Keep the separate synthetic lab browser contract covered
+        run: qingtian-lab demo-check --capability browser-e2e
 
   package:
     name: Distribution and installed CLI
-    needs: test
+    needs: [test, browser-e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -172,7 +214,9 @@ jobs:
         run: |
           python - <<'PY'
           from email.parser import BytesParser
+          from configparser import ConfigParser
           from pathlib import Path, PurePosixPath
+          import re
           import tarfile
           import zipfile
 
@@ -182,18 +226,53 @@ jobs:
               raise SystemExit("Expected exactly one wheel and one source distribution")
 
           forbidden_parts = {
-              "vault", ".state", "source-archive", "receipts", "checkpoints",
+              "vault", ".state", ".data", "source-archive", "receipts", "checkpoints",
               "runtime-data", "release", "__pycache__", ".venv", "venv"
           }
           forbidden_names = {
-              "sources.json", ".env", ".DS_Store", ".qingtian-knowledge-root"
+              "sources.json", ".env", ".DS_Store", ".qingtian-knowledge-root",
+              "instance.lock", "server.log"
           }
+
+          def private_path(name):
+              path = PurePosixPath(name)
+              return (
+                  bool(forbidden_parts.intersection(path.parts))
+                  or path.name in forbidden_names
+                  or path.name.endswith(".local.json")
+                  or path.name.endswith(".pid") or ".pid." in path.name
+                  or (path.name.startswith(".env.") and path.name != ".env.example")
+                  or re.search(r"\.(?:db|sqlite|sqlite3)(?:-(?:wal|shm|journal))?$", path.name, re.I)
+                  or path.suffix.lower() in {".key", ".pem", ".p12", ".pfx", ".pyc", ".pyo"}
+              )
 
           with zipfile.ZipFile(wheels[0]) as archive:
               wheel_names = set(archive.namelist())
               required_wheel = {
+                  "qingtian_engine/__init__.py",
+                  "qingtian_engine/entrypoint.py",
+                  "qingtian_engine/cli.py",
+                  "qingtian_engine/config.py",
+                  "qingtian_engine/server.py",
+                  "qingtian_engine/multipart.py",
+                  "qingtian_engine/runner.py",
+                  "qingtian_engine/worker_entry.py",
+                  "qingtian_engine/runtime_mode.py",
+                  "qingtian_engine/project_config.py",
+                  "qingtian_engine/selftest.py",
+                  "qingtian_engine/knowledge.py",
+                  "qingtian_engine/resources/policy.json",
+                  "qingtian_engine/static/index.html",
+                  "qingtian_engine/static/app.js",
+                  "qingtian_engine/static/styles.css",
                   "qingtian_core/__init__.py",
                   "qingtian_core/cli.py",
+                  "qingtian_core/demo_web.py",
+                  "qingtian_core/capability_checks.py",
+                  "qingtian_core/resources/capabilities.json",
+                  "qingtian_core/resources/demo/index.html",
+                  "qingtian_core/resources/demo/app.css",
+                  "qingtian_core/resources/demo/app.js",
                   "qingtian_core/resources/schemas/task.schema.json",
                   "qingtian_core/resources/schemas/verification-receipt.schema.json",
                   "qingtian_kb/__init__.py",
@@ -208,10 +287,25 @@ jobs:
                   name for name in wheel_names if name.endswith(".dist-info/METADATA")
               )
               metadata = BytesParser().parsebytes(archive.read(metadata_name))
-              if metadata["Name"] != "qingtian-ai" or metadata["Version"] != "0.2.0":
+              if metadata["Name"] != "qingtian-ai" or metadata["Version"] != "0.5.0":
                   raise SystemExit("Wheel metadata name/version mismatch")
+              if metadata["Requires-Python"] != ">=3.11":
+                  raise SystemExit("Wheel Python support metadata mismatch")
               if metadata["License-Expression"] != "Apache-2.0":
                   raise SystemExit("Wheel metadata is missing the Apache-2.0 expression")
+              entry_points_name = next(name for name in wheel_names if name.endswith(".dist-info/entry_points.txt"))
+              entry_points = ConfigParser()
+              entry_points.read_string(archive.read(entry_points_name).decode("utf-8"))
+              expected_commands = {
+                  "qingtian": "qingtian_engine.entrypoint:main",
+                  "qingtian-lab": "qingtian_core.cli:main",
+                  "qingtian-kb": "qingtian_kb.cli:main",
+              }
+              for command, target in expected_commands.items():
+                  if entry_points["console_scripts"].get(command) != target:
+                      raise SystemExit(f"Installed entry point mismatch: {command}")
+              if archive.read("qingtian_engine/resources/policy.json") != Path("qingtian_engine/resources/policy.json").read_bytes():
+                  raise SystemExit("Engine policy differs in wheel")
               for root_schema in Path("schemas").glob("*.json"):
                   packaged = f"qingtian_core/resources/schemas/{root_schema.name}"
                   if archive.read(packaged) != root_schema.read_bytes():
@@ -221,8 +315,7 @@ jobs:
                   if archive.read(packaged) != root_schema.read_bytes():
                       raise SystemExit(f"Provider schema differs in wheel: {root_schema.name}")
               for name in wheel_names:
-                  path = PurePosixPath(name)
-                  if forbidden_parts.intersection(path.parts) or path.name in forbidden_names:
+                  if private_path(name):
                       raise SystemExit(f"Private/generated path in wheel: {name}")
 
           with tarfile.open(sdists[0], "r:gz") as archive:
@@ -237,6 +330,12 @@ jobs:
                   PurePosixPath(*PurePosixPath(item.name).parts[1:]).as_posix()
                   for item in members
               }
+              package_info = archive.extractfile(root + "/PKG-INFO")
+              if package_info is None:
+                  raise SystemExit("Source distribution lacks PKG-INFO")
+              source_metadata = BytesParser().parsebytes(package_info.read())
+              if source_metadata["Name"] != "qingtian-ai" or source_metadata["Version"] != "0.5.0":
+                  raise SystemExit("Source distribution metadata name/version mismatch")
               required_sdist = {
                   ".gitattributes",
                   ".github/workflows/ci.yml",
@@ -253,6 +352,27 @@ jobs:
                   "contracts/provider-response.schema.json",
                   "docs/ADOPTION.md",
                   "docs/ARCHITECTURE.md",
+                  "docs/ENGINE-ARCHITECTURE.md",
+                  "docs/ENGINE-CAPABILITIES.md",
+                  "docs/ENGINE-API.md",
+                  "docs/diagrams/engine-overview.excalidraw",
+                  "docs/diagrams/engine-overview.svg",
+                  "docs/diagrams/engine-overview.png",
+                  "docs/diagrams/engine-lifecycle.excalidraw",
+                  "docs/diagrams/engine-lifecycle.svg",
+                  "docs/diagrams/engine-lifecycle.png",
+                  "docs/BRAND.md",
+                  "docs/CAPABILITIES.md",
+                  "docs/DEMO.md",
+                  "docs/diagrams/01-overall.excalidraw",
+                  "docs/diagrams/01-overall.png",
+                  "docs/diagrams/02-handoff.excalidraw",
+                  "docs/diagrams/02-handoff.png",
+                  "docs/diagrams/03-knowledge.excalidraw",
+                  "docs/diagrams/03-knowledge.png",
+                  "docs/diagrams/04-verification.excalidraw",
+                  "docs/diagrams/04-verification.png",
+                  "docs/diagrams/qingtian-architecture.excalidraw",
                   "examples/project.adapter.json",
                   "examples/task.json",
                   "pyproject.toml",
@@ -268,14 +388,24 @@ jobs:
                   "tests/test_core_store.py",
                   "tests/test_core_verification.py",
                   "tests/test_engine.py",
+                  "tests/test_demo_web.py",
+                  "tests/test_capability_checks.py",
+                  "tests/test_capability_catalog.py",
                   "tests/test_packaging.py",
                   "tests/test_provider.py",
+                  "tests/atlas/__init__.py",
+                  "tests/atlas/test_engine_mode.py",
+                  "tests/atlas/test_public_runtime.py",
+                  "tests/atlas/test_runtime_lifecycle.py",
+                  "tests/atlas/test_server_intake.py",
+                  "tests/atlas/test_worktree_worker.py",
               }
+              required_sdist.update(required_wheel)
               missing = sorted(required_sdist - relative)
               if missing:
                   raise SystemExit(f"Source distribution is missing files: {missing}")
               source_tests = {
-                  path.as_posix() for path in Path("tests").rglob("test_*.py")
+                  path.as_posix() for path in Path("tests").rglob("*.py")
               }
               packaged_tests = {
                   name for name in relative
@@ -288,8 +418,7 @@ jobs:
                       f"extra={sorted(packaged_tests - source_tests)}"
                   )
               for name in relative:
-                  path = PurePosixPath(name)
-                  if forbidden_parts.intersection(path.parts) or path.name in forbidden_names:
+                  if private_path(name):
                       raise SystemExit(f"Private/generated path in source distribution: {name}")
               if any(item.issym() or item.islnk() for item in archive.getmembers()):
                   raise SystemExit("Source distribution contains a link")
@@ -308,9 +437,124 @@ jobs:
           "$smoke_root/venv/bin/python" -m pip install "$artifact"
 
           cd "$smoke_root"
-          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian" doctor > doctor.json
-          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian" init --db "$smoke_root/control/control.db" > init.json
-          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian" demo --db "$smoke_root/control/control.db" > demo.json
+          export QINGTIAN_ENGINE_HOME="$smoke_root/engine"
+          export QINGTIAN_KNOWLEDGE_CONFIG="$smoke_root/disabled-knowledge.json"
+          export QINGTIAN_PROJECTS_CONFIG="$smoke_root/disabled-projects.json"
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian" --workspace "$smoke_root" doctor > engine-doctor.json
+          test ! -e "$smoke_root/engine"
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian" --workspace "$smoke_root" init > engine-init.json
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian" selftest > engine-selftest.json
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian-lab" doctor > lab-doctor.json
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian-lab" init --db "$smoke_root/lab/control.db" > lab-init.json
+          env -u PYTHONPATH "$smoke_root/venv/bin/qingtian-lab" demo --db "$smoke_root/lab/control.db" > lab-demo.json
+
+          env -u PYTHONPATH "$smoke_root/venv/bin/python" - <<'PY'
+          from http.client import HTTPConnection
+          from importlib.metadata import version
+          import json
+          import os
+          from pathlib import Path
+          import signal
+          import socket
+          import subprocess
+          import sys
+          import tempfile
+          import time
+
+          root = Path.cwd().resolve()
+          state = root / "engine"
+          assert version("qingtian-ai") == "0.5.0"
+          doctor = json.loads((root / "engine-doctor.json").read_text())
+          assert doctor["dashboard_ready"] and doctor["read_only"]
+          assert doctor["credentials_checked"] is False
+          initialized = json.loads((root / "engine-init.json").read_text())
+          assert initialized["initialized"] and initialized["imported"] == {}
+          receipt = json.loads((root / "engine-selftest.json").read_text())
+          assert receipt["status"] == "passed" and receipt["scope"] == "synthetic-engine-selftest"
+          assert receipt["model_called"] is False and receipt["legacy_tasks_imported"] == 0
+          assert receipt["checks"] and all(check["passed"] for check in receipt["checks"])
+          with socket.socket() as probe:
+              probe.bind(("127.0.0.1", 0))
+              port = probe.getsockname()[1]
+          environment = {**os.environ, "QINGTIAN_INTAKE_PLANNER": "", "PYTHONDONTWRITEBYTECODE": "1"}
+          environment.pop("PYTHONPATH", None)
+
+          def request(method, path, payload=None):
+              connection = HTTPConnection("127.0.0.1", port, timeout=2)
+              body = None if payload is None else json.dumps(payload).encode()
+              headers = {} if payload is None else {"Content-Type": "application/json"}
+              try:
+                  connection.request(method, path, body=body, headers=headers)
+                  response = connection.getresponse()
+                  return response.status, response.read(), dict(response.getheaders())
+              finally:
+                  connection.close()
+
+          with tempfile.TemporaryFile() as logs:
+              process = subprocess.Popen(
+                  [sys.executable, "-m", "qingtian_engine.server", "--data-dir", str(state),
+                   "--workspace", str(root), "--mode", "manual", "--port", str(port)],
+                  cwd=root, env=environment, stdin=subprocess.DEVNULL, stdout=logs, stderr=logs,
+              )
+              try:
+                  deadline = time.monotonic() + 15
+                  while True:
+                      if process.poll() is not None:
+                          raise AssertionError("Installed engine exited before HTTP became ready")
+                      try:
+                          status, body, _ = request("GET", "/api/health")
+                          if status == 200:
+                              health = json.loads(body)
+                              break
+                      except OSError:
+                          pass
+                      if time.monotonic() >= deadline:
+                          raise AssertionError("Installed engine HTTP startup timed out")
+                      time.sleep(0.1)
+                  assert health["mode"] == "manual" and health["automatic_dispatch"] is False
+                  assert health["read_only"] is False and health["pid"] == process.pid
+                  assert Path(health["data_dir"]).resolve() == state
+                  assert Path(health["workspace"]).resolve() == root
+                  for route, kind in (("/", "text/html"), ("/app.js", "application/javascript"), ("/styles.css", "text/css")):
+                      status, body, headers = request("GET", route)
+                      assert status == 200 and len(body) > 20, route
+                      assert headers["Content-Type"].startswith(kind), route
+                  status, body, _ = request("GET", "/api/dashboard")
+                  dashboard = json.loads(body)
+                  assert status == 200 and dashboard["tasks"] == [] and dashboard["runs"] == []
+                  status, body, _ = request("POST", "/api/tasks", {"title": "Synthetic CI pending task", "priority": 0})
+                  assert status == 201
+                  task = json.loads(body)
+                  assert task["state"] == "INBOX" and task["runs"] == []
+                  # Observe a real installed watchdog cycle, not only startup.
+                  started_at = health["watchdog"]["last_success_at"]
+                  deadline = time.monotonic() + 25
+                  while time.monotonic() < deadline:
+                      status, body, _ = request("GET", "/api/health")
+                      health = json.loads(body)
+                      if status == 200 and health["watchdog"]["last_success_at"] != started_at:
+                          break
+                      time.sleep(0.25)
+                  else:
+                      raise AssertionError("Installed manual watchdog did not complete a cycle")
+                  status, body, _ = request("GET", "/api/dashboard")
+                  dashboard = json.loads(body)
+                  assert status == 200 and len(dashboard["tasks"]) == 1 and dashboard["runs"] == []
+                  assert dashboard["tasks"][0]["state"] == "INBOX"
+              finally:
+                  if process.poll() is None:
+                      process.send_signal(signal.SIGTERM)
+                  try:
+                      process.wait(timeout=10)
+                  except subprocess.TimeoutExpired:
+                      process.kill()
+                      process.wait(timeout=5)
+                      raise AssertionError("Installed engine did not stop after SIGTERM")
+                  assert process.returncode == 0, "Installed engine did not exit cleanly"
+                  assert not (state / "run/server.pid").exists()
+                  assert (state / "run/instance.lock").read_text() == ""
+          print("Installed 0.5 engine: empty init, selftest, HTTP assets, manual watchdog and clean shutdown passed.")
+          PY
 
           mkdir -p "$smoke_root/project/docs" "$smoke_root/knowledge"
           printf '%s\n' '# Synthetic project' 'An architecture decision uses bounded evidence.' > "$smoke_root/project/README.md"
@@ -356,7 +600,7 @@ jobs:
           import json
 
           source_tests = {
-              path.as_posix() for path in Path("tests").rglob("test_*.py")
+                  path.as_posix() for path in Path("tests").rglob("*.py")
           }
           document = json.loads(
               Path("release-allowlist.json").read_text(encoding="utf-8")
@@ -373,8 +617,8 @@ jobs:
               )
           PY
           mkdir -p release
-          python -m qingtian_core bundle --root . --output release/qingtianAI.tar.gz
-          python -m qingtian_core bundle-verify --bundle release/qingtianAI.tar.gz
+          python -m qingtian_engine.entrypoint bundle --root . --output release/qingtianAI.tar.gz
+          python -m qingtian_engine.entrypoint bundle-verify --bundle release/qingtianAI.tar.gz
           bundle_test_root=$(mktemp -d)
           trap 'rm -rf "$bundle_test_root"' EXIT
           bundle_source="$(
@@ -404,3 +648,5 @@ jobs:
           env -u PYTHONPATH python -m pip install -e '.[pdf,dev]'
           env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 \
             python -m unittest discover -s tests -v
+          env -u PYTHONPATH PYTHONDONTWRITEBYTECODE=1 \
+            python -m qingtian_engine.entrypoint selftest

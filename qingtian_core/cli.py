@@ -131,6 +131,24 @@ def cmd_demo(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_demo_web(args: argparse.Namespace) -> int:
+    from .demo_web import run_demo_web
+
+    return run_demo_web(port=args.port, open_browser=not args.no_browser)
+
+
+def cmd_demo_check(args: argparse.Namespace) -> int:
+    from .capability_checks import CapabilityRunner
+
+    runner = CapabilityRunner()
+    try:
+        receipt = runner.run(args.capability)
+    finally:
+        runner.close()
+    emit(receipt)
+    return {"passed": 0, "failed": 1, "blocked": 2}[receipt["status"]]
+
+
 def cmd_task_create(args: argparse.Namespace) -> int:
     with open_store(args.db) as store:
         emit(
@@ -271,6 +289,17 @@ def parser() -> argparse.ArgumentParser:
     demo = sub.add_parser("demo", help="run a synthetic end-to-end control-plane flow")
     demo.add_argument("--db", required=True)
     demo.set_defaults(func=cmd_demo)
+
+    demo_web = sub.add_parser(
+        "demo-web", help="open a disposable, offline guided demo on 127.0.0.1"
+    )
+    demo_web.add_argument("--port", type=int, default=8787, help="loopback port (0 chooses a free port)")
+    demo_web.add_argument("--no-browser", action="store_true", help="print the URL without opening a browser")
+    demo_web.set_defaults(func=cmd_demo_web)
+
+    demo_check = sub.add_parser("demo-check", help="run an isolated synthetic API or browser end-to-end check")
+    demo_check.add_argument("--capability", choices=["api-e2e", "browser-e2e"], default="browser-e2e")
+    demo_check.set_defaults(func=cmd_demo_check)
 
     task_create = sub.add_parser("task-create", help="create a DRAFT task")
     task_create.add_argument("--db", required=True)

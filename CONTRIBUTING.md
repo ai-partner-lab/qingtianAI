@@ -23,7 +23,8 @@ Run both offline smoke paths after a behavior or packaging change:
 
 ```bash
 qingtian doctor
-qingtian demo --db /tmp/qingtian-contributor/control.db
+qingtian selftest
+qingtian-lab demo --db /tmp/qingtian-contributor/legacy.db
 qingtian-kb --help
 ```
 
@@ -47,8 +48,9 @@ public release.
 ## Design rules
 
 - Keep side effects explicit, bounded, and evidence-producing.
-- Preserve lifecycle validation, Task compare-and-swap revisions, idempotency, and
-  `UNKNOWN` reconciliation semantics.
+- Preserve real-engine lifecycle validation, idempotency, evidence completion
+  gates, explicit execution authority and manual-mode boundaries. The lab's CAS
+  revisions and UNKNOWN schema belong only to the separate legacy runtime.
 - Do not describe a reported or missing result as observed success.
 - Keep source discovery allowlist-based and reject unsafe paths by default.
 - Preserve provenance, authority, review, freshness, privacy, and conflict metadata.

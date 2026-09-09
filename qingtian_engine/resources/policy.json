@@ -1,0 +1,36 @@
+{
+  "model": "gpt-5.6-sol",
+  "minimum_reasoning": "high",
+  "high_risk_reasoning": "xhigh",
+  "daytime": {
+    "timezone": "Asia/Shanghai",
+    "start_hour": 8,
+    "end_hour": 20,
+    "enable_fast_mode": true
+  },
+  "nighttime": {
+    "enable_fast_mode": false
+  },
+  "dev_verification": {
+    "full_suite_by_default": false,
+    "affected_tests": true,
+    "minimal_post_deploy_smoke": true
+  },
+  "production": {
+    "automatic_deploy": false,
+    "requires_explicit_release_gate": true
+  },
+  "storage": {
+    "store_full_prompt": false,
+    "store_raw_codex_jsonl": false,
+    "redact_email": true,
+    "max_summary_chars": 500
+  },
+  "experimental": {
+    "app_server_enabled": false,
+    "hatchet_enabled": false,
+    "openhands_enabled": false,
+    "langfuse_enabled": false,
+    "dify_enabled": false
+  }
+}

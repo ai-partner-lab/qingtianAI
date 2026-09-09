@@ -14,7 +14,8 @@ complete history has been reviewed for private data.
 7. Build and verify the release-allowlist bundle, extract it into a clean temporary
    directory, install its development dependencies, and run its complete `tests/`
    suite from the extracted copy.
-8. Confirm `release-allowlist.json` names every `tests/test_*.py` file and does not name
+8. Confirm `release-allowlist.json` names every Python file recursively under `tests/`
+   (including `tests/atlas/`) and does not name
    a checkout-root `.qingtian-knowledge-root`; only the packaged marker template under
    `qingtian_kb/resources/` belongs in distributions.
 9. Reject generated Vaults, local source registries, state databases, receipts, caches,

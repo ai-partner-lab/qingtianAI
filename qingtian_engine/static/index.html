@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>擎天 QINGTIAN · AI Operations Command Center</title>
+  <link rel="stylesheet" href="/styles.css">
+  </head>
+<body>
+  <header class="topbar">
+    <div class="brand-lockup" title="主会话只收件、分发和短反馈；长任务在后台执行。">
+      <h1>擎天</h1>
+      <span id="health" class="pill connection-status is-connecting"
+        role="status" aria-live="polite">连接中</span>
+    </div>
+    <div class="top-actions">
+      <button id="guideButton" class="secondary">能力与上手</button>
+      <button id="systemDetailsButton" class="secondary">系统详情</button>
+      <button id="reportButton" class="secondary">过去24小时日报</button>
+      <button id="newTaskButton" class="primary">交给擎天</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="runtime-banner" aria-label="本机引擎身份">
+      <strong>Qingtian · 真实任务引擎</strong>
+      <span id="runtimeMode" role="status">正在核对运行模式…</span>
+      <small id="runtimePath">正在核对独立运行库。启动不会自动导入历史任务。</small>
+    </section>
+    <section class="mobile-action-overview" aria-label="人工动作概览">
+      <button id="mobileActionBar" type="button" aria-expanded="false">
+        <span id="mobileActionLabel">✓ 暂无需处理</span>
+        <small id="mobileActionBreakdown">外部等待 0</small>
+      </button>
+    </section>
+    <section id="stats" class="stats" aria-label="任务统计"></section>
+
+    <div class="layout">
+      <section class="workspace">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">LIVE FLOW</p>
+            <h2>任务流</h2>
+          </div>
+          <div class="filters">
+            <input id="search" type="search" placeholder="搜索任务、主责或仓库">
+            <button id="refreshButton" class="icon" title="刷新">↻</button>
+          </div>
+        </div>
+        <div id="board" class="board" aria-live="polite"></div>
+      </section>
+
+      <aside id="interventionPanel" class="intervention-panel">
+        <section class="panel">
+          <div class="section-head compact intervention-head">
+            <h2>待我处理 <span id="interventionCount">0</span></h2>
+            <div class="intervention-head-actions">
+              <button id="myActionFilter" class="human-action-filter" type="button"
+                aria-pressed="false" title="只看我的">◉ 我的</button>
+              <button id="closeIntervention" class="icon" type="button"
+                aria-label="关闭人工干预面板">×</button>
+            </div>
+          </div>
+          <div id="interventions" class="interventions"></div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <dialog id="guideDialog" class="system-details-dialog" aria-label="能力与上手">
+    <div class="dialog-head">
+      <div><p class="eyebrow">REAL ENGINE / START HERE</p><h2>从空控制台到可核验的任务</h2></div>
+      <button id="closeGuide" class="icon" aria-label="关闭上手指南">×</button>
+    </div>
+    <p class="system-details-note">此指南只解释真实引擎，不替你执行任务。演示数据始终标记为 synthetic；退出 0 也不等于验收通过。</p>
+    <div id="guideProgress" class="guide-progress"></div>
+    <section id="guideContent" class="guide-content"></section>
+    <div class="guide-actions"><button id="guidePrevious">上一步</button><span id="guideCounter"></span><button id="guideNext" class="primary">下一步</button></div>
+    <details class="guide-capabilities">
+      <summary>展开真实能力与接入边界</summary>
+      <details><summary>任务负责人：收件与规划</summary><p>文本、图片/文件附件、结构化高级选项、确定性路由、父子任务和依赖。默认规划器不声称理解图片语义；真实模型规划器需使用者配置。</p></details>
+      <details><summary>执行负责人：Worker 与工作树</summary><p>明确派发后创建隔离 Git worktree，后台调用 Codex CLI；记录 session、运行状态与退出码。需要使用者安装 Codex、登录并登记自己的仓库。Browser/QA/Infra 是任务标签，不等于已提供这些外部平台。</p></details>
+      <details><summary>核验负责人：证据与恢复</summary><p>未核验证据不放行 DONE。手动模式只对账；自动模式另有租约、幂等、并发上限、恢复和补证据流程。外部部署是否真实成功仍需项目提供验证信号。</p></details>
+      <details><summary>知识负责人：可追溯引用</summary><p>只读检索当前 approved 知识；历史材料不能授权旧任务重跑。附带知识库构建工具，但不附带任何项目的知识内容。Dify 等平台未接线。</p></details>
+    </details>
+  </dialog>
+
+  <dialog id="intakeDialog" class="intake-dialog" aria-label="交给擎天">
+    <button type="button" class="icon close-intake" aria-label="关闭">×</button>
+      <form id="intakeForm" class="composer">
+        <div id="dropZone" class="drop-zone">
+          <textarea id="intakeText" name="text" rows="4" maxlength="20000"
+            placeholder="描述你想解决的事情…"></textarea>
+          <p class="drop-hint">可直接 Cmd/Ctrl+V 粘贴截图，或把文件拖到这里</p>
+        </div>
+        <div id="attachmentTray" class="attachment-tray" aria-live="polite"></div>
+        <div class="composer-tools">
+          <label class="file-picker">
+            <input id="attachmentInput" type="file" multiple
+              accept=".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.xlsx,.txt,.md">
+            <span>＋ 添加图片或文件</span>
+          </label>
+          <span id="attachmentQuota" class="quota">最多 10 个 · 单个 25 MB · 共 100 MB</span>
+        </div>
+        <p id="secretWarning" class="secret-warning" hidden>
+          检测到疑似密码或 Token；提交前会提醒，并只持久化脱敏文本。
+        </p>
+        <fieldset class="intent-picker">
+          <legend>你希望擎天做到哪一步？</legend>
+          <label><input type="radio" name="intent" value="analyze" checked>只分析</label>
+          <label><input type="radio" name="intent" value="implement">实现并测试</label>
+          <label><input type="radio" name="intent" value="implement_and_deploy_dev">实现、测试并推 dev</label>
+        </fieldset>
+        <details id="advancedSettings" class="advanced-settings">
+          <summary>高级设置 <span>普通任务无需填写</span></summary>
+          <div class="advanced-body">
+            <label>任务标题<input name="advanced_title" maxlength="180"
+              placeholder="留空，由擎天生成"></label>
+            <label>范围摘要<textarea name="advanced_scope_summary" rows="3" maxlength="500"
+              placeholder="留空，由擎天提炼"></textarea></label>
+            <div class="form-grid">
+              <label>优先级
+                <select name="advanced_priority">
+                  <option value="">自动判断</option><option value="0">P0</option>
+                  <option value="1">P1</option><option value="2">P2</option>
+                  <option value="3">P3</option>
+                </select>
+              </label>
+              <label>执行器偏好
+                <select name="advanced_worker_type">
+                  <option value="">自动路由</option><option value="cli">CLI</option>
+                  <option value="browser">Browser</option><option value="qa">QA</option>
+                  <option value="infra">Infra</option>
+                </select>
+              </label>
+              <label>环境
+                <select name="advanced_environment">
+                  <option value="">自动判断</option><option value="local">local</option>
+                  <option value="dev">dev</option><option value="test">test</option>
+                  <option value="pre">pre（需门禁）</option><option value="pro">pro（需门禁）</option>
+                </select>
+              </label>
+              <label>基础分支<input name="advanced_base_branch" placeholder="如 origin/dev"></label>
+            </div>
+            <label>仓库路径<input name="advanced_repository" placeholder="/absolute/repo/path"></label>
+            <label class="check"><input name="advanced_requires_deploy" type="checkbox">
+              需要 dev 部署证据</label>
+            <p class="privacy-note">高级设置只是偏好，owner、模型、环境和发布权限仍由政策层最终决定。</p>
+          </div>
+        </details>
+        <div class="composer-actions">
+          <p id="composerStatus" role="status" aria-live="polite"></p>
+          <button id="submitIntake" type="submit" class="primary">交给擎天</button>
+        </div>
+      </form>
+  </dialog>
+
+  <dialog id="systemDetailsDialog" class="system-details-dialog">
+    <div class="dialog-head">
+      <div><p class="eyebrow">SYSTEM DETAIL</p><h2>系统详情</h2></div>
+      <button type="button" class="icon close-system-details" aria-label="关闭系统详情">×</button>
+    </div>
+    <p class="system-details-note">主责会话与原始事件默认折叠，不占用首页决策视线。</p>
+    <details>
+      <summary>主责会话</summary>
+      <div id="sessions" class="sessions"></div>
+    </details>
+    <details>
+      <summary>最近系统事件</summary>
+      <div id="events" class="events"></div>
+    </details>
+  </dialog>
+
+  <dialog id="detailDialog">
+    <div class="dialog-head">
+      <div><p class="eyebrow">TASK DETAIL</p><h2 id="detailTitle">任务详情</h2></div>
+      <button type="button" class="icon close-detail">×</button>
+    </div>
+    <div id="detailBody"></div>
+  </dialog>
+
+  <dialog id="reportDialog" class="report-dialog">
+    <div class="dialog-head report-head">
+      <div class="report-heading">
+        <p class="eyebrow">QINGTIAN DAILY REPORT</p>
+        <h2 id="reportTitle">擎天过去24小时日报</h2>
+        <p id="reportMeta" class="report-meta"></p>
+      </div>
+      <div class="report-actions">
+        <button id="copyReportButton" type="button" class="secondary">复制 Markdown</button>
+        <button id="toggleRawReportButton" type="button" class="secondary" aria-expanded="false">查看原始 Markdown</button>
+        <button type="button" class="icon close-report" aria-label="关闭擎天日报">×</button>
+      </div>
+    </div>
+    <div class="report-scroll">
+      <section id="reportSummary" class="report-summary" aria-label="日报状态汇总"></section>
+      <p id="reportFilterStatus" class="report-filter-status" role="status" aria-live="polite"></p>
+      <div id="reportGroups" class="report-groups"></div>
+      <section id="rawReport" class="raw-report" hidden>
+        <h3>原始 Markdown</h3>
+        <pre id="reportMarkdown"></pre>
+      </section>
+      <p id="reportCopyStatus" class="report-copy-status" role="status" aria-live="polite"></p>
+    </div>
+  </dialog>
+
+  <template id="taskCardTemplate">
+    <article class="task-card" tabindex="0">
+      <div class="card-top">
+        <span class="priority"></span>
+        <span class="state-badge"><span class="state-dot"></span><span class="state-label"></span></span>
+      </div>
+      <h3></h3>
+      <p class="action-summary"></p>
+      <div class="card-progress">
+        <div class="progress"><span></span></div>
+        <span class="progress-value" aria-label="当前阶段，不是实际工作完成百分比">等待状态</span>
+      </div>
+    </article>
+  </template>
+  <script src="/app.js"></script>
+</body>
+</html>

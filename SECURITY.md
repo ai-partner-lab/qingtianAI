@@ -27,10 +27,21 @@ paths and identifiers that are not essential to reproduction.
 
 This repository is not a hardened multi-tenant service. In particular:
 
+- The default engine is loopback-only, with Host/Origin checks but no user login
+  or RBAC. Local programs able to reach the port are in the trust boundary.
+- Actual Workers require a registered Git target and use Codex workspace-write;
+  a worktree is not a container. Local shell tools still need careful authority.
+- Explicit model planning reads the authorized startup workspace, not the project
+  execution registry. Read-only planning can still disclose data to the provider.
+- Synthetic tour is read-only and cannot dispatch; ordinary manual mode is writable
+  and allows explicit new work. Analysis/reference authorization must not be
+  upgraded by switching to auto mode.
+
 - SQLite and Markdown files are not encrypted storage.
 - Knowledge provider labels do not authenticate or authorize callers.
 - Verification adapter commands are trusted local programs and are not sandboxed.
-- The echo provider is a development adapter, not a production model service.
+- The legacy lab echo provider is a development adapter, not the real engine's
+  Codex execution path.
 - Pattern scanning and release scanning are not complete DLP or secret detection.
 - A successful local check does not establish deployment or policy approval.
 

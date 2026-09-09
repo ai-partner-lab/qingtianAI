@@ -1,4 +1,9 @@
 #!/bin/sh
 set -eu
 PROJECT_ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m qingtian_core "$@"
+if [ -x "$PROJECT_ROOT/.venv/bin/python" ]; then
+  QINGTIAN_PYTHON="$PROJECT_ROOT/.venv/bin/python"
+else
+  QINGTIAN_PYTHON=python3
+fi
+PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}" exec "$QINGTIAN_PYTHON" -m qingtian_engine "$@"

@@ -1,0 +1,2664 @@
+{
+  "schema_version": 1,
+  "phases": [
+    {
+      "id": "plan",
+      "step": 1,
+      "title": "规划",
+      "summary": "把目标、范围、验收标准和验证策略固定下来。查看此阶段不会推进演示。",
+      "inputs": [
+        "目标与范围",
+        "验收条件",
+        "已有项目适配器"
+      ],
+      "outputs": [
+        "Task 与修订号",
+        "测试能力选择"
+      ],
+      "prerequisites": [
+        "明确本次工作边界，不把历史测试当作本轮通过"
+      ],
+      "capability_ids": [
+        "task-contracts",
+        "test-selection"
+      ],
+      "leader": {
+        "name": "规划 Leader",
+        "mission": "固定任务目标、验收契约与验证范围，明确需要哪些能力及项目适配条件。"
+      }
+    },
+    {
+      "id": "knowledge",
+      "step": 2,
+      "title": "知识准备",
+      "summary": "准备有来源、有使用边界的上下文，保留人工审核与修订。",
+      "inputs": [
+        "授权资料白名单",
+        "来源与隐私分类"
+      ],
+      "outputs": [
+        "受管 Markdown",
+        "可追溯检索结果",
+        "作用域 Knowledge"
+      ],
+      "prerequisites": [
+        "真实知识库在项目私有目录；演示仅使用合成资料"
+      ],
+      "capability_ids": [
+        "knowledge-hub",
+        "human-review"
+      ],
+      "leader": {
+        "name": "知识 Leader",
+        "mission": "组织授权资料摄取、来源追踪与人工审核，确保上下文有出处且不覆盖人工修订。"
+      }
+    },
+    {
+      "id": "execute",
+      "step": 3,
+      "title": "执行",
+      "summary": "将一次执行与任务、会话和实际模型记录关联。",
+      "inputs": [
+        "Task 与 Session",
+        "经授权的有限上下文",
+        "模型适配器"
+      ],
+      "outputs": [
+        "Run 状态",
+        "请求哈希",
+        "执行证据"
+      ],
+      "prerequisites": [
+        "会话可执行，未解决的 UNKNOWN 不允许新 Run"
+      ],
+      "capability_ids": [
+        "model-gateway",
+        "execution-lineage",
+        "tested-build"
+      ],
+      "leader": {
+        "name": "执行 Leader",
+        "mission": "连接模型适配器、执行记录与受测版本，保留实际执行身份和可核验的来源关系。"
+      }
+    },
+    {
+      "id": "uncertainty",
+      "step": 4,
+      "title": "回执丢失",
+      "summary": "保留未知结果并核对，不把没有回执当作失败重试。",
+      "inputs": [
+        "稳定操作标识",
+        "UNKNOWN Run",
+        "外部系统权威核对方式"
+      ],
+      "outputs": [
+        "未决状态",
+        "检查点",
+        "核对依据"
+      ],
+      "prerequisites": [
+        "Demo 仅模拟本地操作，不产生真实外部动作"
+      ],
+      "capability_ids": [
+        "unknown-reconciliation"
+      ],
+      "leader": {
+        "name": "异常处置 Leader",
+        "mission": "保留 UNKNOWN 与稳定操作标识，安排检查点接手和权威核对，防止不确定动作被盲目重试。"
+      }
+    },
+    {
+      "id": "verify",
+      "step": 5,
+      "title": "验证与接手",
+      "summary": "这里是可独立选择的测试能力入口。验证任务与上方七步演示隔离，无需手动完成前四步。",
+      "inputs": [
+        "测试目标和版本",
+        "环境与测试数据",
+        "能力适配器和基线"
+      ],
+      "outputs": [
+        "单项验证回执",
+        "失败或阻塞原因",
+        "受控证据引用"
+      ],
+      "prerequisites": [
+        "本地 Demo 验证不等于业务项目验收",
+        "浏览器 E2E 需要可选 Playwright 与浏览器"
+      ],
+      "capability_ids": [
+        "api-e2e",
+        "browser-e2e",
+        "api-contracts",
+        "visual-baselines",
+        "cross-platform-geometry",
+        "accessibility",
+        "fault-injection",
+        "performance-budget",
+        "service-integration",
+        "device-e2e"
+      ],
+      "leader": {
+        "name": "测试 Leader",
+        "mission": "按能力组织独立验证，区分本地合成检查、项目适配与待提取机制，明确失败和阻塞范围。"
+      }
+    },
+    {
+      "id": "review",
+      "step": 6,
+      "title": "审查",
+      "summary": "核对结果适用范围、证据完整性和发布条件。",
+      "inputs": [
+        "变更引用",
+        "验证回执",
+        "未测项和风险"
+      ],
+      "outputs": [
+        "审查结论",
+        "明确的通过/失败/阻塞/未测试",
+        "发布决定依据"
+      ],
+      "prerequisites": [
+        "验收权限由项目设置；自动检查不是上线授权"
+      ],
+      "capability_ids": [
+        "evidence-review",
+        "release-verification",
+        "release-evidence",
+        "security-checks",
+        "security-pipeline"
+      ],
+      "leader": {
+        "name": "审查 Leader",
+        "mission": "核对证据关联、未测项、安全边界与发布条件，不将自动检查结果替代人工授权。"
+      }
+    },
+    {
+      "id": "archive",
+      "step": 7,
+      "title": "归档",
+      "summary": "保存可接力记录、可复用知识和可校验分发包。",
+      "inputs": [
+        "当前任务修订",
+        "已核验引用",
+        "发布白名单"
+      ],
+      "outputs": [
+        "Checkpoint",
+        "受管知识",
+        "带哈希的源码包"
+      ],
+      "prerequisites": [
+        "公开机制和合成示例，不公开业务资料与知识正文"
+      ],
+      "capability_ids": [
+        "handoff",
+        "source-bundle",
+        "knowledge-archive"
+      ],
+      "leader": {
+        "name": "归档 Leader",
+        "mission": "保存可接手检查点、可恢复知识资料和经公开边界审查的分发产物。"
+      }
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "task-contracts",
+      "phase_id": "plan",
+      "title": "任务与验收契约",
+      "category": "contract",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "任务状态机、CAS 修订检查和 JSON 契约已内置。",
+      "prerequisites": [
+        "提供符合契约的任务输入"
+      ],
+      "outputs": [
+        "Task",
+        "契约校验结果"
+      ],
+      "boundary": "CLI 能力；本页面不编辑真实任务。",
+      "command": "qingtian contract-validate --help",
+      "agent": {
+        "name": "契约规划 Agent",
+        "mission": "把任务输入与验收条件变成可校验的契约，并保持状态和修订规则一致。",
+        "work_items": [
+          {
+            "id": "task-contracts-prepare",
+            "title": "校验任务输入",
+            "kind": "action",
+            "description": "使用内置契约确认目标对象和必填字段，不在能力浏览页修改真实任务。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "task-contracts-prepare-shape",
+                "title": "确认对象结构",
+                "kind": "check",
+                "description": "按 Task JSON 契约检查字段、类型与状态值，明确不满足项。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "task-contracts-prepare-revision",
+                "title": "核对修改前提",
+                "kind": "check",
+                "description": "对修改请求核对当前 revision 与预期修订；状态迁移必须遵守内核规则。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "task-contracts-deliver",
+            "title": "整理验收依据",
+            "kind": "artifact",
+            "description": "将输入校验与业务验收责任分开交接。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "task-contracts-deliver-criteria",
+                "title": "记录验收条件",
+                "kind": "artifact",
+                "description": "明确本次目标、范围和由项目提供的可观察验收条件。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "task-contracts-deliver-result",
+                "title": "保存契约结果",
+                "kind": "artifact",
+                "description": "输出对象标识和契约问题；契约有效不等于业务功能已验收。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "test-selection",
+      "phase_id": "plan",
+      "title": "按能力选择验证集",
+      "category": "test-selection",
+      "availability": "adapter-required",
+      "runnable": false,
+      "description": "使用项目适配器 profiles 独立选择 e2e、visual 或 contract。风险驱动的增量选测规则需项目提供。",
+      "prerequisites": [
+        "项目适配器",
+        "可信本地命令",
+        "对应环境"
+      ],
+      "outputs": [
+        "选中检查集",
+        "验证回执"
+      ],
+      "boundary": "profiles 已内置；通用增量选测引擎尚未迁移。",
+      "command": "qingtian verify --help",
+      "agent": {
+        "name": "验证编排 Agent",
+        "mission": "使用项目 profiles 选择能力，标出环境依赖与仍需项目提供的风险规则。",
+        "work_items": [
+          {
+            "id": "test-selection-prepare",
+            "title": "选择验证 profile",
+            "kind": "action",
+            "description": "依据目标选择 e2e、visual、contract 等项目 profile，而非自动猜测完整覆盖。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "test-selection-prepare-profiles",
+                "title": "读取能力配置",
+                "kind": "action",
+                "description": "确认适配器中声明的验证集、受信任本地命令和工作目录边界。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "test-selection-prepare-dependencies",
+                "title": "检查执行依赖",
+                "kind": "check",
+                "description": "列出所选能力要求的环境、数据和基线；缺失条件必须阻塞对应检查。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "test-selection-deliver",
+            "title": "生成验证计划",
+            "kind": "artifact",
+            "description": "记录已选择和未选择的检查，保留增量选测尚未通用化的边界。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "test-selection-deliver-selection",
+                "title": "列出选中检查",
+                "kind": "artifact",
+                "description": "交付 profile、检查入口和预期回执，不把菜单选择当作实际运行。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "test-selection-deliver-risk-map",
+                "title": "交接风险映射",
+                "kind": "artifact",
+                "description": "由项目维护改动到风险域的映射及全量回退策略，当前包不自动生成这些规则。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "knowledge-hub",
+      "phase_id": "knowledge",
+      "title": "增量知识摄取与检索",
+      "category": "knowledge",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "白名单、来源追踪、增量哈希、Markdown 和 SQLite FTS。",
+      "prerequisites": [
+        "私有 sources 配置",
+        "明确授权的资料"
+      ],
+      "outputs": [
+        "Vault",
+        "来源登记",
+        "受约束检索结果"
+      ],
+      "boundary": "页面不会读取真实 Vault；检索命中不自动成为事实。",
+      "command": "qingtian-kb --help",
+      "agent": {
+        "name": "知识摄取 Agent",
+        "mission": "从明确授权的来源增量整理知识，并让检索结果保留出处与使用边界。",
+        "work_items": [
+          {
+            "id": "knowledge-hub-prepare",
+            "title": "整理摄取来源",
+            "kind": "action",
+            "description": "按私有 sources 配置确认资料白名单和来源分类。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "knowledge-hub-prepare-allowlist",
+                "title": "确认授权范围",
+                "kind": "check",
+                "description": "只处理明确允许的路径与资料类型，真实 Vault 保持在项目私有目录。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "knowledge-hub-prepare-incremental",
+                "title": "核对来源变化",
+                "kind": "action",
+                "description": "使用来源登记与内容哈希识别增量，保留输入出处及摄取记录。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "knowledge-hub-deliver",
+            "title": "形成可追溯知识",
+            "kind": "artifact",
+            "description": "生成受管 Markdown 与搜索索引，而不是无来源的自动事实。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "knowledge-hub-deliver-managed-notes",
+                "title": "组织受管笔记",
+                "kind": "artifact",
+                "description": "将可摄取内容写入受管结构并关联来源，不将候选或历史材料自动提升为事实。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "knowledge-hub-deliver-retrieval",
+                "title": "交付带出处检索",
+                "kind": "artifact",
+                "description": "通过 SQLite FTS 返回可追溯命中，保留资料分类与适用范围。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "human-review",
+      "phase_id": "knowledge",
+      "title": "人机共建与人工锁",
+      "category": "knowledge-governance",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "managed baseline 与 human_lock 保护人工修订，冲突不静默覆盖。",
+      "prerequisites": [
+        "受管知识根目录",
+        "审核责任人"
+      ],
+      "outputs": [
+        "审核状态",
+        "冲突记录"
+      ],
+      "boundary": "Obsidian 是可选编辑界面，不是必需依赖。",
+      "command": "qingtian-kb validate --help",
+      "agent": {
+        "name": "人工共建 Agent",
+        "mission": "保护人工编辑和审核记录，让摄取冲突显式呈现而非静默覆盖。",
+        "work_items": [
+          {
+            "id": "human-review-prepare",
+            "title": "检查人工保护",
+            "kind": "action",
+            "description": "以 managed baseline 和 human_lock 识别不可直接覆盖的笔记。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "human-review-prepare-baseline",
+                "title": "比较受管基线",
+                "kind": "check",
+                "description": "区分生成基线与当前正文差异，识别人为修改或状态不一致。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "human-review-prepare-lock",
+                "title": "尊重人工锁",
+                "kind": "check",
+                "description": "对受人工保护的资料保留原文，将冲突交由审核责任人处理。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "human-review-deliver",
+            "title": "交接审核结果",
+            "kind": "artifact",
+            "description": "使编辑入口可替换，审核依据与冲突处理仍可追踪。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "human-review-deliver-conflict",
+                "title": "整理冲突记录",
+                "kind": "artifact",
+                "description": "记录受影响笔记、来源和冲突类型，不自动接受新版本。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "human-review-deliver-review",
+                "title": "保存审核决定",
+                "kind": "artifact",
+                "description": "由审核责任人确认修订与分类；Obsidian 只是可选编辑界面。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "model-gateway",
+      "phase_id": "execute",
+      "title": "模型网关适配",
+      "category": "provider",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "命名适配器与离线 Echo，保留请求模型和实际报告模型的差异。",
+      "prerequisites": [
+        "真实供应商由项目接入"
+      ],
+      "outputs": [
+        "ProviderResponse",
+        "实际模型记录"
+      ],
+      "boundary": "开源 Demo 不调用真实模型或使用密钥。",
+      "command": "qingtian demo --help",
+      "agent": {
+        "name": "模型接入 Agent",
+        "mission": "通过命名 Provider 适配器调用模型，并保留请求模型与供应商实际报告的区别。",
+        "work_items": [
+          {
+            "id": "model-gateway-prepare",
+            "title": "准备 Provider 调用",
+            "kind": "action",
+            "description": "检查适配器名称与请求对象，Demo 仅使用离线 Echo。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "model-gateway-prepare-adapter",
+                "title": "确认适配器边界",
+                "kind": "check",
+                "description": "真实供应商配置由项目注入，公开 Demo 不读取密钥或调用真实模型。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "model-gateway-prepare-request",
+                "title": "组织模型请求",
+                "kind": "action",
+                "description": "形成带请求模型信息的 Provider 输入，并与当前 Run 关联。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "model-gateway-deliver",
+            "title": "记录实际响应身份",
+            "kind": "artifact",
+            "description": "保留响应元数据，不用请求中的模型名替代实际报告值。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "model-gateway-deliver-reported-model",
+                "title": "保留实际模型记录",
+                "kind": "artifact",
+                "description": "从 ProviderResponse 记录供应商报告的模型身份及请求模型的差异。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "model-gateway-deliver-result-scope",
+                "title": "说明返回范围",
+                "kind": "artifact",
+                "description": "交付适配器响应与执行结果边界；重试、路由和预算策略由项目接入。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "execution-lineage",
+      "phase_id": "execute",
+      "title": "执行与证据追踪",
+      "category": "traceability",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "Task、Session、Run 和 Evidence 按精确对象关联。",
+      "prerequisites": [
+        "本地控制数据库",
+        "任务标识"
+      ],
+      "outputs": [
+        "任务导出",
+        "Run 状态和请求哈希"
+      ],
+      "boundary": "控制层不默认保存完整提示词或供应商输出。",
+      "command": "qingtian task-show --help",
+      "agent": {
+        "name": "执行追踪 Agent",
+        "mission": "将 Task、Session、Run 和 Evidence 关联为可核验的执行记录。",
+        "work_items": [
+          {
+            "id": "execution-lineage-prepare",
+            "title": "建立对象关联",
+            "kind": "action",
+            "description": "确保会话、运行与证据属于明确任务对象。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "execution-lineage-prepare-subject",
+                "title": "核对主体标识",
+                "kind": "check",
+                "description": "检查 Task、Session、Run 的归属，证据须绑定精确 subject_type 与 subject_id。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "execution-lineage-prepare-run-state",
+                "title": "保留运行状态",
+                "kind": "action",
+                "description": "记录合法状态转换与请求哈希，不用 UI 动画代替内核状态。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "execution-lineage-deliver",
+            "title": "导出追踪材料",
+            "kind": "artifact",
+            "description": "按任务导出执行对象与证据引用，供后续审查与接手使用。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "execution-lineage-deliver-lineage",
+                "title": "整理关联链",
+                "kind": "artifact",
+                "description": "交付对象标识、Run 状态和证据关联，便于定位一次实际执行。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "execution-lineage-deliver-payload-boundary",
+                "title": "标明内容边界",
+                "kind": "artifact",
+                "description": "说明控制层不默认保存完整提示词或供应商输出，不能从请求哈希还原内容。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "unknown-reconciliation",
+      "phase_id": "uncertainty",
+      "title": "UNKNOWN 核对与接手",
+      "category": "recovery",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "未解决的 UNKNOWN 阻止新执行；检查点支持新会话接手核对。",
+      "prerequisites": [
+        "操作标识",
+        "当前修订与有效检查点"
+      ],
+      "outputs": [
+        "核对结果",
+        "接手会话"
+      ],
+      "boundary": "真实远端核对和补偿由项目实现；本地独立 E2E 会验证这项内核规则。",
+      "command": "qingtian demo-check --capability api-e2e",
+      "agent": {
+        "name": "未知结果核对 Agent",
+        "mission": "对丢失回执的运行保留 UNKNOWN，并通过稳定标识核对后再允许后续执行。",
+        "work_items": [
+          {
+            "id": "unknown-reconciliation-prepare",
+            "title": "冻结不确定执行",
+            "kind": "action",
+            "description": "将操作标识与 UNKNOWN Run 一起保留，避免创建新的重复动作。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "unknown-reconciliation-prepare-operation-id",
+                "title": "保存稳定操作标识",
+                "kind": "artifact",
+                "description": "记录 external_operation_id 作为权威核对入口，不将无回执直接解释为失败。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "unknown-reconciliation-prepare-new-run-block",
+                "title": "检查新运行阻断",
+                "kind": "check",
+                "description": "未解决 UNKNOWN 期间不允许新 Run，以防外部动作重复发生。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "unknown-reconciliation-deliver",
+            "title": "组织接手与核对",
+            "kind": "artifact",
+            "description": "使用有效检查点接手，由权威来源确认结果；真实远端补偿需项目实现。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "unknown-reconciliation-deliver-checkpoint",
+                "title": "检查接手依据",
+                "kind": "check",
+                "description": "核对当前任务修订、来源会话停止执行及有效检查点后再建立接手会话。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "unknown-reconciliation-deliver-reconcile",
+                "title": "记录核对结果",
+                "kind": "artifact",
+                "description": "保留核对证据与明确结果；本地合成示例不能证明真实远端状态。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "api-e2e",
+      "phase_id": "verify",
+      "title": "本地 API 端到端验证",
+      "category": "api-e2e",
+      "availability": "bundled",
+      "runnable": true,
+      "description": "新建独立临时服务，通过真实 HTTP 完成七步、核对 UNKNOWN 并验证最终 DONE。",
+      "prerequisites": [
+        "Python 3.11+"
+      ],
+      "outputs": [
+        "独立运行标识",
+        "逐项回执",
+        "合成任务标识"
+      ],
+      "boundary": "只测试开源 Demo 的 HTTP/控制层，不是浏览器 E2E，也不连接业务环境。",
+      "command": "qingtian demo-check --capability api-e2e",
+      "agent": {
+        "name": "API 端到端 Agent",
+        "mission": "新建独立合成服务，以真实 HTTP 核对七步状态、重复请求、UNKNOWN 与最终持久对象。",
+        "work_items": [
+          {
+            "id": "api-e2e-prepare",
+            "title": "建立独立 HTTP 轮次",
+            "kind": "action",
+            "description": "使用新的临时服务和合成 Task，不推进页面上方主 Guide。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "api-e2e-fresh-task",
+                "title": "确认全新任务",
+                "kind": "check",
+                "description": "新服务开始时 step 为 0，Task 为 DRAFT，并记录独立任务标识。",
+                "check_ids": [
+                  "api.fresh_task"
+                ],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "api-e2e-advance",
+            "title": "运行七步与重复请求检查",
+            "kind": "action",
+            "description": "通过固定 HTTP 端点推进，检查关键状态而非伪造动画中间结果。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "api-e2e-step-1",
+                "title": "HTTP 第 1 步",
+                "kind": "check",
+                "description": "真实 HTTP 推进规划步骤，并与持久状态核对。",
+                "check_ids": [
+                  "api.step.1"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-stale-step",
+                "title": "拒绝重复步骤",
+                "kind": "check",
+                "description": "重复提交旧 expected_step 必须返回 409，持久步数仍为 1。",
+                "check_ids": [
+                  "api.stale_step"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-step-2",
+                "title": "HTTP 第 2 步",
+                "kind": "check",
+                "description": "真实 HTTP 写入合成知识步骤，并确认步数只前进一次。",
+                "check_ids": [
+                  "api.step.2"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-step-3",
+                "title": "HTTP 第 3 步",
+                "kind": "check",
+                "description": "真实 HTTP 执行离线 Provider 步骤，并核对实际状态。",
+                "check_ids": [
+                  "api.step.3"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-step-4",
+                "title": "HTTP 第 4 步",
+                "kind": "check",
+                "description": "真实 HTTP 进入回执丢失步骤，确认持久 Run 确实为 UNKNOWN。",
+                "check_ids": [
+                  "api.step.4",
+                  "api.unknown"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-step-5",
+                "title": "HTTP 第 5 步",
+                "kind": "check",
+                "description": "真实 HTTP 接手核对，确认两个 Session 且所有 Run 已成功后才继续。",
+                "check_ids": [
+                  "api.step.5",
+                  "api.reconcile"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-step-6",
+                "title": "HTTP 第 6 步",
+                "kind": "check",
+                "description": "真实 HTTP 推进审查步骤，确认服务端步数一致。",
+                "check_ids": [
+                  "api.step.6"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-step-7",
+                "title": "HTTP 第 7 步",
+                "kind": "check",
+                "description": "真实 HTTP 推进归档步骤，确认七步没有重复执行。",
+                "check_ids": [
+                  "api.step.7"
+                ],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "api-e2e-final",
+            "title": "核对最终持久结果",
+            "kind": "artifact",
+            "description": "将七步结果、运行证据与检查点绑定到本次独立任务回执。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "api-e2e-final-done",
+                "title": "核对最终 DONE",
+                "kind": "check",
+                "description": "七步结束且 done 为真、Task 状态为 DONE。",
+                "check_ids": [
+                  "api.done"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-final-runs",
+                "title": "核对全部 Run",
+                "kind": "check",
+                "description": "恰有三个持久 Run，核对后均为 SUCCEEDED。",
+                "check_ids": [
+                  "api.runs"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-final-evidence",
+                "title": "核对运行证据",
+                "kind": "check",
+                "description": "每个 Run 都有主体标识匹配的 passed Evidence。",
+                "check_ids": [
+                  "api.evidence"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-final-checkpoint",
+                "title": "核对最终检查点",
+                "kind": "check",
+                "description": "存在与最终 Task revision 一致的检查点。",
+                "check_ids": [
+                  "api.checkpoint"
+                ],
+                "children": []
+              },
+              {
+                "id": "api-e2e-final-contracts",
+                "title": "校验持久对象契约",
+                "kind": "check",
+                "description": "Task 和所有持久记录符合内置契约及完整性检查。",
+                "check_ids": [
+                  "api.contracts"
+                ],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "browser-e2e",
+      "phase_id": "verify",
+      "title": "本地浏览器 E2E",
+      "category": "browser-e2e",
+      "availability": "bundled-optional",
+      "runnable": true,
+      "description": "真实 Playwright 浏览器操作独立 Demo，检查七步、刷新续看、桌面和窄屏以及 JavaScript 错误。",
+      "prerequisites": [
+        "可选 browser 依赖",
+        "Playwright Chromium 或已安装 Chrome"
+      ],
+      "outputs": [
+        "浏览器版本",
+        "逐项回执",
+        "独立合成任务标识"
+      ],
+      "boundary": "缺少依赖显示 blocked，不算失败或通过；不代表真实业务流程验收。",
+      "command": "qingtian demo-check --capability browser-e2e",
+      "agent": {
+        "name": "浏览器端到端 Agent",
+        "mission": "用真实 Playwright 操作桌面与窄屏独立 Demo，核对工作树只读浏览、七步流程、刷新续看和运行边界。",
+        "work_items": [
+          {
+            "id": "browser-e2e-desktop-round",
+            "title": "桌面真实浏览器轮次",
+            "kind": "action",
+            "description": "在固定视口通过页面操作独立合成任务，并保留实际 HTTP 状态关联。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "browser-e2e-desktop-fresh",
+                "title": "确认桌面独立任务",
+                "kind": "check",
+                "description": "真实浏览器打开新服务，确认合成任务从 DRAFT 和第 0 步开始。",
+                "check_ids": [
+                  "browser.desktop.fresh_task"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-desktop-mindmap",
+                "title": "验证桌面能力工作树",
+                "kind": "action",
+                "description": "展开真实目录而不推进主流程，以回执证明导航、递归内容和只读边界。",
+                "check_ids": [],
+                "children": [
+                  {
+                    "id": "browser-e2e-desktop-leaders",
+                    "title": "展开七位 Leader",
+                    "kind": "check",
+                    "description": "通过界面检查七个阶段 Leader 导航可访问。",
+                    "check_ids": [
+                      "browser.desktop.mindmap.leaders"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-desktop-tree",
+                    "title": "展开 Agent 工作项",
+                    "kind": "check",
+                    "description": "展开浏览器 Agent 及递归工作节点，检查实际目录内容可见。",
+                    "check_ids": [
+                      "browser.desktop.mindmap.tree"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-desktop-readonly",
+                    "title": "核对只读浏览",
+                    "kind": "check",
+                    "description": "浏览工作树前后主 snapshot 完全不变，且没有 mutation 请求。",
+                    "check_ids": [
+                      "browser.desktop.mindmap.readonly"
+                    ],
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "browser-e2e-desktop-step-1",
+                "title": "桌面点击第 1 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 1。",
+                "check_ids": [
+                  "browser.desktop.step.1"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-desktop-step-2",
+                "title": "桌面点击第 2 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 2。",
+                "check_ids": [
+                  "browser.desktop.step.2"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-desktop-step-3",
+                "title": "桌面点击第 3 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 3。",
+                "check_ids": [
+                  "browser.desktop.step.3"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-desktop-reload",
+                "title": "刷新后续看",
+                "kind": "check",
+                "description": "第 3 步刷新页面后，Task 标识和当前步数保持，不重放已完成工作。",
+                "check_ids": [
+                  "browser.reload"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-desktop-step-4",
+                "title": "桌面点击第 4 步",
+                "kind": "check",
+                "description": "真实点击进入回执丢失阶段，同时核对持久 Run 为 UNKNOWN。",
+                "check_ids": [
+                  "browser.desktop.step.4",
+                  "browser.desktop.unknown"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-desktop-step-5",
+                "title": "桌面点击第 5 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 5。",
+                "check_ids": [
+                  "browser.desktop.step.5"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-desktop-step-6",
+                "title": "桌面点击第 6 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 6。",
+                "check_ids": [
+                  "browser.desktop.step.6"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-desktop-step-7",
+                "title": "桌面点击第 7 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 7。",
+                "check_ids": [
+                  "browser.desktop.step.7"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-desktop-final",
+                "title": "核对桌面最终记录",
+                "kind": "artifact",
+                "description": "核对浏览器流程背后的真实控制层结果，不仅检查完成横幅。",
+                "check_ids": [],
+                "children": [
+                  {
+                    "id": "browser-e2e-desktop-done",
+                    "title": "核对最终 DONE",
+                    "kind": "check",
+                    "description": "done 为真、step 为 7 且 Task 状态为 DONE。",
+                    "check_ids": [
+                      "browser.desktop.done"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-desktop-runs",
+                    "title": "核对成功 Run",
+                    "kind": "check",
+                    "description": "三个持久 Run 在核对后均为 SUCCEEDED。",
+                    "check_ids": [
+                      "browser.desktop.runs"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-desktop-evidence",
+                    "title": "核对运行证据",
+                    "kind": "check",
+                    "description": "每个 Run 都有精确关联的 passed Evidence。",
+                    "check_ids": [
+                      "browser.desktop.evidence"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-desktop-checkpoint",
+                    "title": "核对当前检查点",
+                    "kind": "check",
+                    "description": "存在对应最终 Task revision 的检查点。",
+                    "check_ids": [
+                      "browser.desktop.checkpoint"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-desktop-contracts",
+                    "title": "核对对象契约",
+                    "kind": "check",
+                    "description": "所有持久对象通过内置契约和完整性校验。",
+                    "check_ids": [
+                      "browser.desktop.contracts"
+                    ],
+                    "children": []
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "browser-e2e-mobile-round",
+            "title": "390px 窄屏真实浏览器轮次",
+            "kind": "action",
+            "description": "在固定视口通过页面操作独立合成任务，并保留实际 HTTP 状态关联。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "browser-e2e-mobile-fresh",
+                "title": "确认390px 窄屏独立任务",
+                "kind": "check",
+                "description": "通过重置按钮创建不同任务标识的全新轮次，再开始窄屏验证。",
+                "check_ids": [
+                  "browser.mobile.fresh_task"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-mobile-mindmap",
+                "title": "验证390px 窄屏能力工作树",
+                "kind": "action",
+                "description": "展开真实目录而不推进主流程，以回执证明导航、递归内容和只读边界。",
+                "check_ids": [],
+                "children": [
+                  {
+                    "id": "browser-e2e-mobile-leaders",
+                    "title": "展开七位 Leader",
+                    "kind": "check",
+                    "description": "通过界面检查七个阶段 Leader 导航可访问。",
+                    "check_ids": [
+                      "browser.mobile.mindmap.leaders"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-mobile-tree",
+                    "title": "展开 Agent 工作项",
+                    "kind": "check",
+                    "description": "展开浏览器 Agent 及递归工作节点，检查实际目录内容可见。",
+                    "check_ids": [
+                      "browser.mobile.mindmap.tree"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-mobile-readonly",
+                    "title": "核对只读浏览",
+                    "kind": "check",
+                    "description": "浏览工作树前后主 snapshot 完全不变，且没有 mutation 请求。",
+                    "check_ids": [
+                      "browser.mobile.mindmap.readonly"
+                    ],
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "browser-e2e-mobile-step-1",
+                "title": "390px 窄屏点击第 1 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 1。",
+                "check_ids": [
+                  "browser.mobile.step.1"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-mobile-step-2",
+                "title": "390px 窄屏点击第 2 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 2。",
+                "check_ids": [
+                  "browser.mobile.step.2"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-mobile-step-3",
+                "title": "390px 窄屏点击第 3 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 3。",
+                "check_ids": [
+                  "browser.mobile.step.3"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-mobile-step-4",
+                "title": "390px 窄屏点击第 4 步",
+                "kind": "check",
+                "description": "真实点击进入回执丢失阶段，同时核对持久 Run 为 UNKNOWN。",
+                "check_ids": [
+                  "browser.mobile.step.4",
+                  "browser.mobile.unknown"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-mobile-step-5",
+                "title": "390px 窄屏点击第 5 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 5。",
+                "check_ids": [
+                  "browser.mobile.step.5"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-mobile-step-6",
+                "title": "390px 窄屏点击第 6 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 6。",
+                "check_ids": [
+                  "browser.mobile.step.6"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-mobile-step-7",
+                "title": "390px 窄屏点击第 7 步",
+                "kind": "check",
+                "description": "真实点击下一步，页面显示与服务端持久 step 必须同为 7。",
+                "check_ids": [
+                  "browser.mobile.step.7"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-mobile-final",
+                "title": "核对390px 窄屏最终记录",
+                "kind": "artifact",
+                "description": "核对浏览器流程背后的真实控制层结果，不仅检查完成横幅。",
+                "check_ids": [],
+                "children": [
+                  {
+                    "id": "browser-e2e-mobile-done",
+                    "title": "核对最终 DONE",
+                    "kind": "check",
+                    "description": "done 为真、step 为 7 且 Task 状态为 DONE。",
+                    "check_ids": [
+                      "browser.mobile.done"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-mobile-runs",
+                    "title": "核对成功 Run",
+                    "kind": "check",
+                    "description": "三个持久 Run 在核对后均为 SUCCEEDED。",
+                    "check_ids": [
+                      "browser.mobile.runs"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-mobile-evidence",
+                    "title": "核对运行证据",
+                    "kind": "check",
+                    "description": "每个 Run 都有精确关联的 passed Evidence。",
+                    "check_ids": [
+                      "browser.mobile.evidence"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-mobile-checkpoint",
+                    "title": "核对当前检查点",
+                    "kind": "check",
+                    "description": "存在对应最终 Task revision 的检查点。",
+                    "check_ids": [
+                      "browser.mobile.checkpoint"
+                    ],
+                    "children": []
+                  },
+                  {
+                    "id": "browser-e2e-mobile-contracts",
+                    "title": "核对对象契约",
+                    "kind": "check",
+                    "description": "所有持久对象通过内置契约和完整性校验。",
+                    "check_ids": [
+                      "browser.mobile.contracts"
+                    ],
+                    "children": []
+                  }
+                ]
+              },
+              {
+                "id": "browser-e2e-mobile-layout",
+                "title": "检查窄屏横向溢出",
+                "kind": "check",
+                "description": "390px 页面文档宽度不得超过视口容差；这不是原生设备验收。",
+                "check_ids": [
+                  "browser.mobile.layout"
+                ],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "browser-e2e-guardrails",
+            "title": "检查两轮运行边界",
+            "kind": "artifact",
+            "description": "收集真实浏览器错误与应用网络请求，限制在独立本地源。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "browser-e2e-javascript",
+                "title": "检查 JavaScript 错误",
+                "kind": "check",
+                "description": "两个轮次均未观察到未捕获的页面 JavaScript 错误。",
+                "check_ids": [
+                  "browser.javascript"
+                ],
+                "children": []
+              },
+              {
+                "id": "browser-e2e-network",
+                "title": "检查本地网络边界",
+                "kind": "check",
+                "description": "应用请求未离开隔离 loopback origin；外部请求被阻止并记录。",
+                "check_ids": [
+                  "browser.network"
+                ],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "api-contracts",
+      "phase_id": "verify",
+      "title": "API 与接口契约测试",
+      "category": "contract",
+      "availability": "adapter-required",
+      "runnable": false,
+      "description": "可用现有 schema 校验器与验证回执接入项目接口测试。",
+      "prerequisites": [
+        "公开接口契约",
+        "合成夹具",
+        "项目测试执行器"
+      ],
+      "outputs": [
+        "契约差异",
+        "测试结果与哈希"
+      ],
+      "boundary": "产品端点、账号与数据必须由各项目提供，不能直接复制原项目用例。",
+      "command": "qingtian verify --help",
+      "agent": {
+        "name": "接口契约 Agent",
+        "mission": "通过项目执行器检查接口行为与声明契约，并将结果写成可关联回执。",
+        "work_items": [
+          {
+            "id": "api-contracts-prepare",
+            "title": "准备接口验证输入",
+            "kind": "action",
+            "description": "使用项目提供的接口契约和合成夹具，不复制私有端点与账户。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "api-contracts-prepare-schema",
+                "title": "确认接口描述",
+                "kind": "check",
+                "description": "核对请求、响应、错误格式及项目声明的幂等语义。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "api-contracts-prepare-executor",
+                "title": "选择项目执行器",
+                "kind": "action",
+                "description": "将接口场景交给受信任的本地验证命令，确认被测版本和目标范围。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "api-contracts-deliver",
+            "title": "整理契约差异",
+            "kind": "artifact",
+            "description": "将结构差异与行为失败分开，交付实际运行结果。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "api-contracts-deliver-diff",
+                "title": "输出差异定位",
+                "kind": "artifact",
+                "description": "列出不符合声明契约的字段或响应条件，保留场景标识。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "api-contracts-deliver-receipt",
+                "title": "绑定验证回执",
+                "kind": "artifact",
+                "description": "记录命令结果、证据摘要和适用范围；schema 校验不能替代完整业务 E2E。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "visual-baselines",
+      "phase_id": "verify",
+      "title": "视觉基线与截图比较",
+      "category": "visual",
+      "availability": "planned",
+      "runnable": false,
+      "description": "拟提取固定视口、确定性夹具、截图与基线审核机制。",
+      "prerequisites": [
+        "同版本页面",
+        "视口/语言/字体固定",
+        "经审核的基线"
+      ],
+      "outputs": [
+        "截图",
+        "差异图",
+        "基线审核记录"
+      ],
+      "boundary": "当前未打包通用视觉执行器；截图观察与阻断门禁要分开，不默认修改基线。",
+      "command": "",
+      "agent": {
+        "name": "视觉基线 Agent",
+        "mission": "定义可重复截图和人工基线审核流程；通用视觉执行器仍待提取。",
+        "work_items": [
+          {
+            "id": "visual-baselines-prepare",
+            "title": "定义稳定捕获条件",
+            "kind": "action",
+            "description": "接入后先固定视口、语言、字体、页面版本和合成数据。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "visual-baselines-prepare-determinism",
+                "title": "列出稳定化要求",
+                "kind": "check",
+                "description": "明确动画、时间、资源加载和字体就绪条件，避免随机状态污染基线。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "visual-baselines-prepare-capture",
+                "title": "设计截图范围",
+                "kind": "action",
+                "description": "约定页面与组件裁剪区域及平台基线分区，不使用真实业务截图作公开示例。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "visual-baselines-deliver",
+            "title": "定义差异交付",
+            "kind": "artifact",
+            "description": "区分截图观察、几何断言与阻断门禁，基线更新须人工批准。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "visual-baselines-deliver-diff-report",
+                "title": "设计差异报告",
+                "kind": "artifact",
+                "description": "接入后输出当前图、基线图、差异图和捕获环境，不能仅记录一个通过标签。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "visual-baselines-deliver-approval",
+                "title": "约定基线审核",
+                "kind": "check",
+                "description": "基线变更必须说明原因并审核；当前计划不默认改写基线或执行像素门禁。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cross-platform-geometry",
+      "phase_id": "verify",
+      "title": "跨端状态与几何对齐",
+      "category": "cross-platform",
+      "availability": "planned",
+      "runnable": false,
+      "description": "拟提取状态指纹、证据 manifest、dp 几何容差与缺证据检查。",
+      "prerequisites": [
+        "两个端的对应状态",
+        "设备和构建标识",
+        "几何与截图证据"
+      ],
+      "outputs": [
+        "几何门禁结果",
+        "可追溯差异报告"
+      ],
+      "boundary": "参考机制的像素差异仅作信息展示，不可宣传为像素 1:1 强制门禁。",
+      "command": "",
+      "agent": {
+        "name": "跨端几何 Agent",
+        "mission": "定义同状态跨端捕获及几何校验，保留像素差异仅供定位的参考机制边界。",
+        "work_items": [
+          {
+            "id": "cross-platform-geometry-prepare",
+            "title": "定义跨端证据输入",
+            "kind": "action",
+            "description": "接入后用 manifest 关联两个端的同一场景、构建和设备。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "cross-platform-geometry-prepare-fingerprint",
+                "title": "核对状态对应",
+                "kind": "check",
+                "description": "要求状态指纹与来源记录对应，缺少必要状态或截图时不得判断通过。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "cross-platform-geometry-prepare-density",
+                "title": "检查单位换算",
+                "kind": "check",
+                "description": "声明 viewport dp/px、设备密度与语义几何盒子，检查换算一致性。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "cross-platform-geometry-deliver",
+            "title": "定义对齐报告",
+            "kind": "artifact",
+            "description": "按项目公差比较语义区域，并单独呈现像素差异。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "cross-platform-geometry-deliver-geometry",
+                "title": "设计几何判定",
+                "kind": "artifact",
+                "description": "接入后报告缺失区域和超出 dp 公差的偏移，保留对应证据引用。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "cross-platform-geometry-deliver-pixel-boundary",
+                "title": "标记像素非阻断",
+                "kind": "check",
+                "description": "像素 diff 仅定位信息，不宣传为像素 1:1 硬门禁；执行器当前仍待提取。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "device-e2e",
+      "phase_id": "verify",
+      "title": "Android / iOS 真机验证",
+      "category": "device-e2e",
+      "availability": "planned",
+      "runnable": false,
+      "description": "拟提供移动端测试适配契约和 Maestro 等执行器接入范例。",
+      "prerequisites": [
+        "设备或模拟器",
+        "不可变应用包",
+        "测试账号和新鲜数据"
+      ],
+      "outputs": [
+        "设备/构建证据",
+        "步骤结果",
+        "截图或视频引用"
+      ],
+      "boundary": "现有参考流程仍含脚手架；本地窄屏浏览器不是真机验收。",
+      "command": "",
+      "agent": {
+        "name": "原生设备 Agent",
+        "mission": "规划原生应用包与设备测试接入，不把窄屏浏览器误认为 Android 或 iOS 验收。",
+        "work_items": [
+          {
+            "id": "device-e2e-prepare",
+            "title": "准备原生运行条件",
+            "kind": "action",
+            "description": "接入后核验平台匹配的不可变应用产物、设备和测试数据。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "device-e2e-prepare-artifact",
+                "title": "核对应用包身份",
+                "kind": "check",
+                "description": "记录应用包摘要与构建版本，区分设备包和模拟器包的适用平台。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "device-e2e-prepare-device",
+                "title": "确认设备与数据",
+                "kind": "check",
+                "description": "要求设备或模拟器、正常数据新建流程及受限测试身份；缺项明确未运行。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "device-e2e-deliver",
+            "title": "定义原生执行回执",
+            "kind": "artifact",
+            "description": "将 Maestro 等执行器输出关联到具体平台与构建。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "device-e2e-deliver-steps",
+                "title": "设计原生步骤",
+                "kind": "action",
+                "description": "约定启动、深链、test ID 和交互检查，不以移动端单测代替设备 E2E。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "device-e2e-deliver-device-evidence",
+                "title": "交付设备证据",
+                "kind": "artifact",
+                "description": "接入后记录平台、步骤结果和受控截图/视频引用；当前仍是待提取接入方案。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "evidence-review",
+      "phase_id": "review",
+      "title": "证据关联与审查",
+      "category": "review",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "将验证回执关联到明确的 Task、Session 或 Run，记录风险与未测项。",
+      "prerequisites": [
+        "验收条件",
+        "实际验证回执"
+      ],
+      "outputs": [
+        "Evidence",
+        "审查依据"
+      ],
+      "boundary": "回执不会自动判断所有未测项；审查结论与权限由项目负责。",
+      "command": "qingtian task-show --help",
+      "agent": {
+        "name": "证据审查 Agent",
+        "mission": "核对验证回执与任务对象的关联，显式保留未测项和风险。",
+        "work_items": [
+          {
+            "id": "evidence-review-prepare",
+            "title": "核对证据有效范围",
+            "kind": "action",
+            "description": "检查回执对应的任务、执行对象和验收条件。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "evidence-review-prepare-binding",
+                "title": "检查主体关联",
+                "kind": "check",
+                "description": "证据必须关联明确 Task、Session 或 Run，不用相似标题替代精确标识。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "evidence-review-prepare-coverage",
+                "title": "识别未测条件",
+                "kind": "check",
+                "description": "对照验收要求列出没有实际回执支撑的条件，避免把局部成功扩大为全量通过。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "evidence-review-deliver",
+            "title": "整理审查依据",
+            "kind": "artifact",
+            "description": "将事实、风险与需要人工决定的事项分别交接。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "evidence-review-deliver-outcomes",
+                "title": "记录结果分类",
+                "kind": "artifact",
+                "description": "区分 passed、failed、blocked 与 not-tested，不自动补全缺失验证。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "evidence-review-deliver-decision",
+                "title": "交接审查责任",
+                "kind": "artifact",
+                "description": "提供证据引用与风险说明；最终审查结论和权限由项目负责。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "release-verification",
+      "phase_id": "review",
+      "title": "发布前验证集",
+      "category": "release",
+      "availability": "adapter-required",
+      "runnable": false,
+      "description": "使用 release profile 组织契约、测试与分发检查；通用部署状态机待独立提取。",
+      "prerequisites": [
+        "受信任项目适配器",
+        "版本固定",
+        "发布条件"
+      ],
+      "outputs": [
+        "验证回执",
+        "未满足条件"
+      ],
+      "boundary": "检查通过不等于已授权部署；portable verifier 不运行 external 动作。",
+      "command": "qingtian verify --help",
+      "agent": {
+        "name": "发布条件 Agent",
+        "mission": "使用 release profile 汇总发布前检查，同时保留自动验证与部署授权的界线。",
+        "work_items": [
+          {
+            "id": "release-verification-prepare",
+            "title": "组织发布前检查",
+            "kind": "action",
+            "description": "确认固定版本、受信任适配器和项目声明的发布条件。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "release-verification-prepare-profile",
+                "title": "读取 release profile",
+                "kind": "action",
+                "description": "选择契约、测试和分发检查，不自动扩展到未授权命令。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "release-verification-prepare-side-effects",
+                "title": "检查执行边界",
+                "kind": "check",
+                "description": "portable verifier 不运行标为 external 的动作，不能借检查入口触发部署。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "release-verification-deliver",
+            "title": "交付发布条件回执",
+            "kind": "artifact",
+            "description": "整理已满足、失败和仍缺少的条件，不自动上线。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "release-verification-deliver-verification",
+                "title": "汇总检查结果",
+                "kind": "artifact",
+                "description": "保留各检查的实际回执及对应构建，不以单个成功项覆盖其他失败。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "release-verification-deliver-authorization",
+                "title": "标明授权缺口",
+                "kind": "check",
+                "description": "检查通过只是发布决定依据；通用部署状态机仍待独立提取，部署由项目授权。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "security-checks",
+      "phase_id": "review",
+      "title": "源码公开边界扫描",
+      "category": "security",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "扫描明显密钥与主机路径，并通过白名单控制对外文件。",
+      "prerequisites": [
+        "待发布目录",
+        "人工审查与历史审查"
+      ],
+      "outputs": [
+        "扫描结果",
+        "受控文件列表"
+      ],
+      "boundary": "不等于完整 DLP、依赖漏洞扫描或业务安全验收。",
+      "command": "qingtian scan --help",
+      "agent": {
+        "name": "公开边界 Agent",
+        "mission": "使用精确白名单和明显敏感模式检查控制公开内容范围。",
+        "work_items": [
+          {
+            "id": "security-checks-prepare",
+            "title": "检查待公开文件",
+            "kind": "action",
+            "description": "对审核目录应用 allowlist 与明显敏感信息扫描。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "security-checks-prepare-allowlist",
+                "title": "核对文件白名单",
+                "kind": "check",
+                "description": "只纳入明确允许的源文件与合成资源，不默认公开整棵工作目录。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "security-checks-prepare-scan",
+                "title": "扫描明显敏感模式",
+                "kind": "action",
+                "description": "检查明显密钥与主机路径等模式，结果仍需结合人工审查与历史审查。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "security-checks-deliver",
+            "title": "交付公开边界报告",
+            "kind": "artifact",
+            "description": "使发布文件列表与扫描局限一起可见。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "security-checks-deliver-files",
+                "title": "列出受控文件",
+                "kind": "artifact",
+                "description": "输出被纳入的文件与扫描发现，便于逐项确认公开范围。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "security-checks-deliver-limitations",
+                "title": "保留扫描局限",
+                "kind": "artifact",
+                "description": "说明该扫描不是完整 DLP、依赖漏洞检查或业务安全验收。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "handoff",
+      "phase_id": "archive",
+      "title": "检查点与会话接力",
+      "category": "handoff",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "以当前任务修订、来源会话和内容哈希验证接手依据。",
+      "prerequisites": [
+        "合法检查点",
+        "旧会话停止执行"
+      ],
+      "outputs": [
+        "恢复快照",
+        "新会话引用"
+      ],
+      "boundary": "跨机器搬运和重建执行环境由接入方负责。",
+      "command": "qingtian task-show --help",
+      "agent": {
+        "name": "会话接力 Agent",
+        "mission": "使用有效检查点为新会话提供接手依据，不默认搬运外部运行环境。",
+        "work_items": [
+          {
+            "id": "handoff-prepare",
+            "title": "核验恢复前提",
+            "kind": "action",
+            "description": "检查点必须与当前任务修订和来源会话一致。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "handoff-prepare-revision",
+                "title": "检查修订与哈希",
+                "kind": "check",
+                "description": "核对检查点内容哈希、任务 revision 及未被替代的有效性。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "handoff-prepare-session-stop",
+                "title": "确认旧会话停执",
+                "kind": "check",
+                "description": "旧会话停止执行后才允许按合法检查点接手，避免双会话同时执行。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "handoff-deliver",
+            "title": "整理接手快照",
+            "kind": "artifact",
+            "description": "向新会话交付明确对象引用与待续工作。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "handoff-deliver-snapshot",
+                "title": "交付恢复依据",
+                "kind": "artifact",
+                "description": "保留检查点、来源会话和相关对象引用，不以按时间最新替代有效性验证。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "handoff-deliver-environment",
+                "title": "说明环境责任",
+                "kind": "artifact",
+                "description": "跨机器搬运、Provider 配置和运行环境重建由接入方完成。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "source-bundle",
+      "phase_id": "archive",
+      "title": "可校验源码分发",
+      "category": "distribution",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "精确 allowlist、归档 manifest 和哈希校验，支持新机器安装。",
+      "prerequisites": [
+        "已审核源码与发布白名单"
+      ],
+      "outputs": [
+        "源码归档",
+        "MANIFEST",
+        "校验结果"
+      ],
+      "boundary": "公开包不含私有知识库、真实会话或凭据；哈希不是作者签名。",
+      "command": "qingtian bundle --help",
+      "agent": {
+        "name": "分发打包 Agent",
+        "mission": "按审核白名单生成带 manifest 的源码包，并保留安装与公开边界。",
+        "work_items": [
+          {
+            "id": "source-bundle-prepare",
+            "title": "准备公开归档输入",
+            "kind": "action",
+            "description": "只选择已审核源码、配置模板和合成示例。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "source-bundle-prepare-private-boundary",
+                "title": "排除私有材料",
+                "kind": "check",
+                "description": "不纳入真实会话、业务知识正文或凭据，逐项核对归档白名单。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "source-bundle-prepare-manifest",
+                "title": "生成文件清单",
+                "kind": "action",
+                "description": "为归档内容形成 MANIFEST 与文件哈希，支持分发后的完整性核对。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "source-bundle-deliver",
+            "title": "交付可核验源码包",
+            "kind": "artifact",
+            "description": "验证内容完整性并说明新机器安装条件。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "source-bundle-deliver-integrity",
+                "title": "核对归档内容",
+                "kind": "check",
+                "description": "按 manifest 校验文件与哈希，不能将 hash 解释为作者数字签名。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "source-bundle-deliver-install",
+                "title": "交接安装入口",
+                "kind": "artifact",
+                "description": "提供源码归档及安装验证方式，保留目标环境和可选依赖要求。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "knowledge-archive",
+      "phase_id": "archive",
+      "title": "知识备份与恢复验证",
+      "category": "knowledge-recovery",
+      "availability": "bundled",
+      "runnable": false,
+      "description": "保留一致的 Vault、managed baseline 与 source registry，重建搜索索引。",
+      "prerequisites": [
+        "同一时点的受控备份",
+        "审核与分类记录"
+      ],
+      "outputs": [
+        "可恢复资料集",
+        "重建和验证结果"
+      ],
+      "boundary": "仅复制搜索数据库不算完整知识库迁移。",
+      "command": "qingtian-kb restore-baseline --help",
+      "agent": {
+        "name": "知识恢复 Agent",
+        "mission": "保留知识正文、受管基线与来源登记的一致备份，再重建和校验索引。",
+        "work_items": [
+          {
+            "id": "knowledge-archive-prepare",
+            "title": "确认恢复材料完整",
+            "kind": "action",
+            "description": "按同一时点准备 Vault、managed baseline 和 source registry。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "knowledge-archive-prepare-snapshot",
+                "title": "核对备份组成",
+                "kind": "check",
+                "description": "仅有搜索数据库不足以恢复知识库，必须保留正文与管理元数据。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "knowledge-archive-prepare-governance",
+                "title": "保留审核分类",
+                "kind": "artifact",
+                "description": "备份资料的审核状态、来源分类和人工保护信息，避免恢复后丢失边界。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "knowledge-archive-deliver",
+            "title": "组织恢复验证",
+            "kind": "artifact",
+            "description": "在项目受控目录恢复材料，并重建可派生的搜索索引。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "knowledge-archive-deliver-restore",
+                "title": "恢复受管基线",
+                "kind": "action",
+                "description": "使用受管恢复流程核对当前正文与基线，不用恢复操作静默覆盖人工更改。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "knowledge-archive-deliver-validate",
+                "title": "检查可检索性",
+                "kind": "check",
+                "description": "重建后验证索引和来源关联，结果仅证明该恢复资料集的完整性与可用性。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "tested-build",
+      "phase_id": "execute",
+      "title": "受测构建与版本绑定",
+      "category": "build-provenance",
+      "availability": "planned",
+      "runnable": false,
+      "description": "拟提取一次构建、同一产物测试、提交与产物摘要绑定机制。",
+      "prerequisites": [
+        "项目构建适配器",
+        "不可变产物",
+        "CI artifact 存储"
+      ],
+      "outputs": [
+        "受测产物标识",
+        "版本证据"
+      ],
+      "boundary": "原项目框架和发布配置不直接迁移；当前未打包通用构建执行器。",
+      "command": "",
+      "agent": {
+        "name": "受测构建 Agent",
+        "mission": "设计一次构建、同一产物测试和版本绑定链路；通用执行器尚未打包。",
+        "work_items": [
+          {
+            "id": "tested-build-prepare",
+            "title": "定义构建身份",
+            "kind": "action",
+            "description": "接入后由项目构建适配器产生不可变产物。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "tested-build-prepare-commit",
+                "title": "绑定源码版本",
+                "kind": "check",
+                "description": "明确源码提交与构建参数，避免测试和交付使用不同代码状态。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "tested-build-prepare-digest",
+                "title": "登记产物摘要",
+                "kind": "artifact",
+                "description": "记录构建产物标识与内容 digest，连同可信 CI 来源一起保存。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "tested-build-deliver",
+            "title": "定义同产物验证",
+            "kind": "artifact",
+            "description": "后续测试应下载并校验同一个受测产物，不自行重建替代。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "tested-build-deliver-reuse",
+                "title": "检查复用链路",
+                "kind": "check",
+                "description": "约定下载、摘要检查、解包和启动被测运行时的步骤。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "tested-build-deliver-provenance",
+                "title": "交付版本证据",
+                "kind": "artifact",
+                "description": "接入后关联测试结果与产物身份；hash 不等于签名，真实 CI 存储由项目提供。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "accessibility",
+      "phase_id": "verify",
+      "title": "自动化无障碍检查",
+      "category": "accessibility",
+      "availability": "planned",
+      "runnable": false,
+      "description": "拟提供 axe 扫描、区域限定、严重性筛选和精简报告。",
+      "prerequisites": [
+        "浏览器执行器",
+        "axe-core",
+        "项目页面与扫描范围"
+      ],
+      "outputs": [
+        "违规项",
+        "规则与节点引用"
+      ],
+      "boundary": "自动化检查不等于完整无障碍认证，键盘与辅助技术仍需人工验证。",
+      "command": "",
+      "agent": {
+        "name": "无障碍检查 Agent",
+        "mission": "规划 axe 扫描与人工补充验证，使自动化覆盖范围明确可见。",
+        "work_items": [
+          {
+            "id": "accessibility-prepare",
+            "title": "定义扫描策略",
+            "kind": "action",
+            "description": "接入后固定页面范围、规则标签和严重性筛选。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "accessibility-prepare-scope",
+                "title": "确认扫描区域",
+                "kind": "check",
+                "description": "选择需要扫描的 DOM 区域，明确未被纳入的页面和状态。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "accessibility-prepare-rules",
+                "title": "配置规则与级别",
+                "kind": "action",
+                "description": "记录 axe 规则标签与严重性阈值，不能将过滤后的结果当成所有问题。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "accessibility-deliver",
+            "title": "定义可访问性报告",
+            "kind": "artifact",
+            "description": "自动化结果需可定位，人工辅助技术验证另行交接。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "accessibility-deliver-violations",
+                "title": "整理违规节点",
+                "kind": "artifact",
+                "description": "接入后输出规则、目标节点和简要原因，报告中的页面内容需脱敏。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "accessibility-deliver-manual",
+                "title": "保留人工补测",
+                "kind": "artifact",
+                "description": "键盘操作、读屏与内容语义仍需人工验证；当前不提供完整认证或内置执行器。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "fault-injection",
+      "phase_id": "verify",
+      "title": "客户端异常与并发交互",
+      "category": "resilience",
+      "availability": "planned",
+      "runnable": false,
+      "description": "拟提取延迟、500/401、局部重试、重复点击和旧身份响应隔离的通用夹具。",
+      "prerequisites": [
+        "合成接口契约",
+        "明确的故障预期"
+      ],
+      "outputs": [
+        "请求计数",
+        "恢复步骤",
+        "客户端证据"
+      ],
+      "boundary": "故障 mock 验证客户端行为，不证明真实后台已恢复。",
+      "command": "",
+      "agent": {
+        "name": "异常交互 Agent",
+        "mission": "设计可控故障夹具，验证客户端失败恢复、重复操作与身份切换隔离。",
+        "work_items": [
+          {
+            "id": "fault-injection-prepare",
+            "title": "定义故障实验",
+            "kind": "action",
+            "description": "接入后在合成接口边界注入明确错误，不访问真实业务数据。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "fault-injection-prepare-responses",
+                "title": "设计延迟与错误",
+                "kind": "action",
+                "description": "配置延迟、500/401 和局部资源失败，写清加载、空态与错误态预期。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "fault-injection-prepare-races",
+                "title": "设计交互竞争",
+                "kind": "action",
+                "description": "构造重复点击、旧身份响应晚到和重试顺序，记录关联请求计数。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "fault-injection-deliver",
+            "title": "定义恢复条件",
+            "kind": "artifact",
+            "description": "逐项检查 UI 与客户端状态，不能借 mock 结果证明真实后台恢复。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "fault-injection-deliver-retry",
+                "title": "检查局部恢复",
+                "kind": "check",
+                "description": "接入后确认恢复只重试应重试的工作，旧失败状态不污染新结果。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "fault-injection-deliver-isolation",
+                "title": "交付隔离证据",
+                "kind": "artifact",
+                "description": "输出请求序列与可观察状态，明确该通用夹具目前仍待提取。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "performance-budget",
+      "phase_id": "verify",
+      "title": "性能与资源预算",
+      "category": "performance",
+      "availability": "planned",
+      "runnable": false,
+      "description": "拟提取 CLS、资源并行度、滚动压力和本地查询 p50/p95 的测试模式。",
+      "prerequisites": [
+        "固定运行环境与数据规模",
+        "项目阈值"
+      ],
+      "outputs": [
+        "可重复指标",
+        "预算比较"
+      ],
+      "boundary": "本地合成基准不是云端压测，也没有默认通用合格阈值。",
+      "command": "",
+      "agent": {
+        "name": "性能预算 Agent",
+        "mission": "定义固定环境下的资源与时序实验，并让阈值来源可解释。",
+        "work_items": [
+          {
+            "id": "performance-budget-prepare",
+            "title": "固定性能实验条件",
+            "kind": "action",
+            "description": "接入后先声明浏览器、设备、数据规模和项目预算。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "performance-budget-prepare-environment",
+                "title": "记录环境与样本",
+                "kind": "artifact",
+                "description": "区分冷/热场景、运行次数及硬件条件，避免跨机器直接比较。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "performance-budget-prepare-signals",
+                "title": "选择可观察指标",
+                "kind": "action",
+                "description": "按场景采集 CLS、资源并行度、滚动压力或本地查询耗时。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "performance-budget-deliver",
+            "title": "定义预算结果",
+            "kind": "artifact",
+            "description": "使用实际分布对照项目阈值，保留合成基准范围。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "performance-budget-deliver-statistics",
+                "title": "设计指标汇总",
+                "kind": "artifact",
+                "description": "接入后输出可重复样本与 p50/p95 等摘要，并记录测量方法。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "performance-budget-deliver-threshold",
+                "title": "解释阈值边界",
+                "kind": "check",
+                "description": "不存在默认通用合格阈值；本地合成预算不能证明云端容量或生产 SLO。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "service-integration",
+      "phase_id": "verify",
+      "title": "数据库迁移与事务集成",
+      "category": "service-integration",
+      "availability": "planned",
+      "runnable": false,
+      "description": "拟用通用合成模型提供 PostgreSQL/Redis、迁移链、CAS 与回滚验证 Harness。",
+      "prerequisites": [
+        "隔离数据库或容器",
+        "合成 Schema",
+        "运行时受限角色"
+      ],
+      "outputs": [
+        "迁移结果",
+        "事务与并发回执"
+      ],
+      "boundary": "不包含原项目数据库结构或真实业务数据；现阶段尚未打包。",
+      "command": "",
+      "agent": {
+        "name": "事务集成 Agent",
+        "mission": "规划隔离 PostgreSQL/Redis 合成测试，验证迁移、竞争和回滚语义。",
+        "work_items": [
+          {
+            "id": "service-integration-prepare",
+            "title": "准备隔离服务",
+            "kind": "action",
+            "description": "接入后使用专用数据库或容器与合成 Schema，绝不借用生产数据。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "service-integration-prepare-services",
+                "title": "检查依赖就绪",
+                "kind": "check",
+                "description": "确认 PostgreSQL/Redis 可用与运行角色受限；缺依赖明确 blocked。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "service-integration-prepare-migrations",
+                "title": "设计迁移夹具",
+                "kind": "action",
+                "description": "为合成模型建立迁移链和独立清理范围，不迁入原项目数据库结构。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "service-integration-deliver",
+            "title": "定义事务验证",
+            "kind": "artifact",
+            "description": "通过真实服务验证并发条件和失败回滚，而非仅靠内存模拟。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "service-integration-deliver-cas",
+                "title": "设计并发断言",
+                "kind": "check",
+                "description": "接入后用竞争执行验证 CAS 冲突、事务原子性和异常回滚。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "service-integration-deliver-cleanup",
+                "title": "交付隔离回执",
+                "kind": "artifact",
+                "description": "输出迁移与事务结果及清理状态；该 Harness 当前尚未打包。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "release-evidence",
+      "phase_id": "review",
+      "title": "发布证据与回调幂等",
+      "category": "release-evidence",
+      "availability": "planned",
+      "runnable": false,
+      "description": "拟提取提交、镜像摘要、运行尝试和发布选择绑定，以及回调幂等的离线 Harness。",
+      "prerequisites": [
+        "通用发布证据契约",
+        "项目采集适配器"
+      ],
+      "outputs": [
+        "一致性校验",
+        "重复回调与状态转换结果"
+      ],
+      "boundary": "离线解析器或内存 Harness 不代表实际云部署已验证。",
+      "command": "",
+      "agent": {
+        "name": "发布证据 Agent",
+        "mission": "定义构建、发布选择和回调幂等的离线验证链路。",
+        "work_items": [
+          {
+            "id": "release-evidence-prepare",
+            "title": "定义证据关联输入",
+            "kind": "action",
+            "description": "接入后以通用契约绑定源码、镜像与 CI 运行尝试。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "release-evidence-prepare-identity",
+                "title": "核对精确身份",
+                "kind": "check",
+                "description": "拒绝提交、digest、运行尝试或发布选择不一致的证据组合。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "release-evidence-prepare-schema",
+                "title": "检查证据形状",
+                "kind": "check",
+                "description": "约定必要字段与未知字段处理，缺少权威采集结果不得补写成功。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "release-evidence-deliver",
+            "title": "设计回调与状态实验",
+            "kind": "artifact",
+            "description": "通过离线 Harness 验证重复回调与合法转换，真实部署另行核验。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "release-evidence-deliver-idempotency",
+                "title": "设计重复回调",
+                "kind": "action",
+                "description": "重复提交同一操作回调，验证不会重复推进状态或产生第二次副作用记录。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "release-evidence-deliver-scope",
+                "title": "交付一致性报告",
+                "kind": "artifact",
+                "description": "输出证据匹配和状态实验结果；内存或离线成功不代表真实云部署完成。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "security-pipeline",
+      "phase_id": "review",
+      "title": "安全 CI 接入模板",
+      "category": "security-ci",
+      "availability": "planned",
+      "runnable": false,
+      "description": "拟提供历史密钥、SAST、依赖/IaC/镜像扫描的配置化模板。",
+      "prerequisites": [
+        "安全扫描工具",
+        "项目规则与例外审核",
+        "漏洞库访问"
+      ],
+      "outputs": [
+        "扫描报告",
+        "严重性门禁"
+      ],
+      "boundary": "不沿用原项目豁免或凭据；当前目录展示的是待提取能力。",
+      "command": "",
+      "agent": {
+        "name": "安全流水线 Agent",
+        "mission": "规划可配置扫描模板和可复核例外，而非迁入项目现有豁免。",
+        "work_items": [
+          {
+            "id": "security-pipeline-prepare",
+            "title": "定义扫描输入与工具",
+            "kind": "action",
+            "description": "接入后固定扫描对象、工具版本和规则来源。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "security-pipeline-prepare-layers",
+                "title": "选择扫描层",
+                "kind": "action",
+                "description": "按项目选择历史密钥、SAST、依赖、IaC 与镜像扫描，并声明未覆盖层。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "security-pipeline-prepare-dependencies",
+                "title": "确认外部依赖",
+                "kind": "check",
+                "description": "列明扫描工具与漏洞库访问条件，不自动安装或注入凭据。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "security-pipeline-deliver",
+            "title": "定义安全门禁回执",
+            "kind": "artifact",
+            "description": "按项目策略呈现严重性与例外，保证跳过和过期规则可见。",
+            "check_ids": [],
+            "children": [
+              {
+                "id": "security-pipeline-deliver-findings",
+                "title": "设计结果汇总",
+                "kind": "artifact",
+                "description": "接入后关联报告、扫描版本与产物身份，不能仅保存一个绿色状态。",
+                "check_ids": [],
+                "children": []
+              },
+              {
+                "id": "security-pipeline-deliver-exceptions",
+                "title": "约束例外治理",
+                "kind": "check",
+                "description": "例外需项目审核、限定范围与复核周期；当前模板待提取，不沿用旧项目豁免。",
+                "check_ids": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

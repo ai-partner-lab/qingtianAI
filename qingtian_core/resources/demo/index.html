@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#090b1c">
+    <title>Qingtian · 深夜调度舞台</title>
+    <link rel="stylesheet" href="/app.css">
+    <script src="/app.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content" data-i18n="skip">跳到主要内容</a>
+
+    <div class="ambient" aria-hidden="true">
+      <span class="aurora aurora-one"></span>
+      <span class="aurora aurora-two"></span>
+      <span class="star star-one"></span>
+      <span class="star star-two"></span>
+      <span class="star star-three"></span>
+      <span class="grid-horizon"></span>
+    </div>
+
+    <header class="site-header">
+      <a class="brand" href="#main-content" aria-label="Qingtian demo home">
+        <svg class="brand-mark" viewBox="0 0 48 48" aria-hidden="true">
+          <path d="M24 4 39 12.5v17L24 44 9 29.5v-17Z"></path>
+          <path d="M15 18.5 24 13l9 5.5v10L24 34l-9-5.5Z"></path>
+          <circle cx="24" cy="24" r="3.5"></circle>
+        </svg>
+        <span>
+          <strong>Qingtian</strong>
+          <small data-i18n="brandSub">深夜调度舞台</small>
+        </span>
+      </a>
+
+      <div class="header-actions">
+        <span class="mode-chip" id="mode-chip">
+          <span class="mode-dot" aria-hidden="true"></span>
+          <span data-i18n="offlineMode">离线引导模式</span>
+        </span>
+        <button class="ghost-button language-toggle" id="language-toggle" type="button" aria-label="Switch to English">
+          <span aria-hidden="true">中 / EN</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="main-content" tabindex="-1">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow"><span aria-hidden="true">✦</span> OFFLINE-GUIDED DETERMINISTIC DEMO</p>
+          <h1 id="hero-title"><span class="hero-line" data-i18n="heroLineOne">让 AI 协作的每一步</span><span class="hero-gradient" data-i18n="heroLineTwo">都有据可查</span></h1>
+          <p class="hero-description" data-i18n="heroDescription">
+            无需登录、无需云服务。沿着七步引导，观察任务、回执与知识记录如何确定性地流转。
+          </p>
+          <div class="hero-facts" aria-label="Demo properties">
+            <span><i aria-hidden="true">01</i><b data-i18n="factOffline">完全离线</b></span>
+            <span><i aria-hidden="true">02</i><b data-i18n="factReceipt">回执驱动</b></span>
+            <span><i aria-hidden="true">03</i><b data-i18n="factNoLogin">无需登录</b></span>
+          </div>
+        </div>
+
+        <aside class="mission-card glass-card" aria-labelledby="mission-title">
+          <div class="mission-orb" aria-hidden="true">
+            <span></span>
+            <svg viewBox="0 0 52 52">
+              <path d="M26 7 41 15.5v17L26 41 11 32.5v-17Z"></path>
+              <circle cx="26" cy="26" r="5"></circle>
+            </svg>
+          </div>
+          <div class="mission-heading">
+            <p class="section-kicker" data-i18n="currentTask">当前任务</p>
+            <span class="connection-pill" id="connection-pill" data-state="loading">
+              <span aria-hidden="true"></span>
+              <span id="connection-label" data-i18n="connecting">连接中</span>
+            </span>
+          </div>
+          <h2 id="mission-title">Qingtian Demo</h2>
+          <p id="mission-objective" class="mission-objective" data-i18n="loadingTask">正在读取本地任务快照…</p>
+          <div class="task-state-row">
+            <span data-i18n="taskState">任务状态</span>
+            <strong class="state-badge" id="task-state">—</strong>
+          </div>
+          <div class="progress-label">
+            <span data-i18n="overallProgress">整体进度</span>
+            <strong><span id="step-value">0</span> / <span id="step-total">7</span></strong>
+          </div>
+          <div class="progress-track" role="progressbar" aria-label="整体进度" aria-valuemin="0" aria-valuemax="7" aria-valuenow="0" id="progress-track">
+            <span id="progress-fill"></span>
+          </div>
+        </aside>
+      </section>
+
+      <section class="step-section" aria-labelledby="step-title">
+        <div class="section-heading">
+          <div>
+            <p class="section-kicker" data-i18n="guidedRoute">GUIDED ROUTE</p>
+            <h2 id="step-title" data-i18n="sevenSteps">AI 调度脑图</h2>
+          </div>
+          <p data-i18n="stepHint">从 Leader 到专项 Agent、工作项逐层展开；浏览不会推进主流程。</p>
+        </div>
+        <div class="mind-map-root" aria-label="Qingtian dispatch root">
+          <button class="mind-root-node" id="mind-root-toggle" type="button" aria-expanded="true" aria-controls="mind-root-branches">
+            <span class="mind-root-mark" aria-hidden="true">
+              <svg viewBox="0 0 48 48"><path d="M24 4 39 12.5v17L24 44 9 29.5v-17Z"></path><path d="M15 18.5 24 13l9 5.5v10L24 34l-9-5.5Z"></path><circle cx="24" cy="24" r="3.5"></circle></svg>
+            </span>
+            <span class="mind-root-copy"><small>QINGTIAN CONTROL ROOT</small><strong data-i18n="mindRootTitle">Qingtian 总控</strong><em data-i18n="mindRootMission">统筹七个阶段，只呈现有回执的真实状态</em></span>
+            <span class="mind-root-chevron" aria-hidden="true">⌄</span>
+          </button>
+        </div>
+        <div class="mind-root-branches" id="mind-root-branches">
+          <ol class="step-rail" id="step-rail" aria-label="七步调度路线"></ol>
+
+          <article class="phase-explorer glass-card" id="phase-explorer" aria-labelledby="phase-title">
+          <header class="phase-header">
+            <div class="phase-heading-copy">
+              <div class="phase-meta-line">
+                <span class="phase-index" id="phase-index">PHASE 01</span>
+                <span class="phase-state" id="phase-state" data-tone="selected" data-i18n="selectedStage">正在查看</span>
+              </div>
+              <h3 id="phase-title" data-i18n="capabilitiesLoading">正在读取阶段能力…</h3>
+              <p id="phase-summary" data-i18n="capabilitiesLoadingHint">能力目录独立于上方引导进度，不会自动推进任务。</p>
+            </div>
+            <button class="phase-toggle" id="phase-toggle" type="button" aria-expanded="true" aria-controls="phase-detail-content">
+              <span data-i18n="collapseStage">收起阶段详情</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+            </button>
+          </header>
+
+          <div class="phase-detail-content" id="phase-detail-content">
+            <section class="leader-node" aria-labelledby="phase-leader-name">
+              <span class="leader-connector" aria-hidden="true"></span>
+              <span class="leader-mark" aria-hidden="true">L</span>
+              <div>
+                <small data-i18n="phaseLeader">PHASE LEADER</small>
+                <strong id="phase-leader-name">—</strong>
+                <p id="phase-leader-mission" data-i18n="leaderLoading">正在读取阶段负责人使命…</p>
+              </div>
+            </section>
+
+            <details class="phase-contract-details">
+              <summary data-i18n="phaseContractSummary">查看阶段契约（前置条件 / 输入 / 输出）</summary>
+              <div class="phase-facts">
+                <section class="phase-fact" aria-labelledby="phase-prerequisites-title">
+                  <h4 id="phase-prerequisites-title"><span aria-hidden="true">01</span><span data-i18n="prerequisites">前置条件</span></h4>
+                  <ul id="phase-prerequisites"></ul>
+                </section>
+                <section class="phase-fact" aria-labelledby="phase-inputs-title">
+                  <h4 id="phase-inputs-title"><span aria-hidden="true">02</span><span data-i18n="inputs">输入</span></h4>
+                  <ul id="phase-inputs"></ul>
+                </section>
+                <section class="phase-fact" aria-labelledby="phase-outputs-title">
+                  <h4 id="phase-outputs-title"><span aria-hidden="true">03</span><span data-i18n="outputs">输出</span></h4>
+                  <ul id="phase-outputs"></ul>
+                </section>
+              </div>
+            </details>
+
+            <div class="capability-section" aria-labelledby="capability-title">
+              <div class="capability-heading">
+                <div>
+                  <p class="section-kicker">SPECIALIST AGENT BRANCHES</p>
+                  <h4 id="capability-title" data-i18n="stageCapabilities">本阶段专项 Agent</h4>
+                </div>
+                <p data-i18n="capabilityBoundary">展开 Agent 可查看工作树与能力详情；未实现能力不会出现假运行按钮。</p>
+              </div>
+              <div class="capability-grid" id="capability-grid" aria-live="polite"></div>
+              <div class="capability-message" id="capability-message" role="status" hidden></div>
+              <button class="catalog-retry" id="capability-retry" type="button" hidden data-i18n="retryCapabilities">重试能力目录</button>
+            </div>
+
+            <div class="independent-test-note">
+              <span aria-hidden="true">↗</span>
+              <p><strong data-i18n="independentTitle">独立验证，不推进主引导</strong><span data-i18n="independentBoundary">可运行能力会创建独立临时任务，只验证本地开源 Demo；不代表真实业务验收，也不会改变上方七步进度。</span></p>
+            </div>
+          </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="workspace-grid">
+        <div class="stage-panel glass-card" aria-labelledby="stage-title">
+          <div class="panel-heading">
+            <div>
+              <p class="section-kicker" data-i18n="crewStage">RESPONSIBILITY MAP</p>
+              <h2 id="stage-title" data-i18n="dispatchStage">AI 协作分工</h2>
+            </div>
+            <span class="live-caption"><i aria-hidden="true"></i><span data-i18n="snapshotLive">快照实时映射</span></span>
+          </div>
+
+          <div class="crew-stage" id="crew-stage">
+            <div class="orbit orbit-outer" aria-hidden="true"></div>
+            <div class="orbit orbit-inner" aria-hidden="true"></div>
+            <div class="event-trail" id="event-trail" aria-hidden="true"><span></span></div>
+
+            <div class="stage-core" id="stage-core">
+              <span class="core-ring" aria-hidden="true"></span>
+              <svg viewBox="0 0 64 64" aria-hidden="true">
+                <path d="M32 7 53 19v26L32 57 11 45V19Z"></path>
+                <path d="m22 32 7 7 14-16"></path>
+              </svg>
+              <strong data-i18n="taskCore">任务核心</strong>
+              <small id="core-state">—</small>
+            </div>
+
+            <button class="crew-card crew-planner" data-role="planner" type="button" aria-controls="role-inspector">
+              <span class="crew-status" data-role-status data-i18n="waiting">待命</span>
+              <svg class="avatar" viewBox="0 0 128 138" aria-hidden="true">
+                <path class="shadow" d="M29 129c9-12 61-14 73 0-14 8-58 9-73 0Z"></path>
+                <path class="body" d="M43 90c8-8 35-8 43 0l8 35H34Z"></path>
+                <path class="arm" d="M39 98 24 112l8 8 17-13M88 98l17 13-7 9-18-13"></path>
+                <circle class="head" cx="64" cy="57" r="37"></circle>
+                <path class="hair" d="M30 54c0-26 15-40 34-40 22 0 35 16 35 40-9-4-14-13-17-22-13 13-29 18-52 22Z"></path>
+                <circle class="eye" cx="50" cy="60" r="3.5"></circle><circle class="eye" cx="77" cy="60" r="3.5"></circle>
+                <path class="smile" d="M57 72c5 4 10 4 15 0"></path>
+                <path class="accessory" d="m99 17 3.5 7 7.5 1-5.5 5.5 1.5 7.5-7-3.5-7 3.5 1.5-7.5L88 25l7.5-1Z"></path>
+                <path class="accessory-line" d="M96 39 88 53M46 101h36v21H46Zm8 6h20M54 113h14"></path>
+              </svg>
+              <span class="crew-copy"><strong data-role-title>规划者</strong><small data-role-name>planner</small></span>
+            </button>
+
+            <button class="crew-card crew-keeper" data-role="keeper" type="button" aria-controls="role-inspector">
+              <span class="crew-status" data-role-status data-i18n="waiting">待命</span>
+              <svg class="avatar" viewBox="0 0 128 138" aria-hidden="true">
+                <path class="shadow" d="M29 129c9-12 61-14 73 0-14 8-58 9-73 0Z"></path>
+                <path class="body" d="M42 91c9-9 35-9 44 0l7 34H35Z"></path>
+                <path class="arm" d="m43 99-17 12 7 10 18-13m34-9 16 12-7 10-17-13"></path>
+                <circle class="head" cx="64" cy="57" r="37"></circle>
+                <path class="hair" d="M29 55c1-29 16-41 36-41 23 0 35 18 34 42l-12-19c-11 11-31 16-58 18Z"></path>
+                <circle class="glasses" cx="49" cy="60" r="10"></circle><circle class="glasses" cx="78" cy="60" r="10"></circle><path class="accessory-line" d="M59 60h9"></path>
+                <circle class="eye" cx="49" cy="60" r="2.8"></circle><circle class="eye" cx="78" cy="60" r="2.8"></circle>
+                <path class="smile" d="M57 74c5 3 10 3 15 0"></path>
+                <path class="accessory" d="M47 101h35v24H47z"></path><path class="accessory-line" d="M64 102v23m-12-17h9m7 0h9"></path>
+              </svg>
+              <span class="crew-copy"><strong data-role-title>知识管理员</strong><small data-role-name>keeper</small></span>
+            </button>
+
+            <button class="crew-card crew-builder" data-role="builder" type="button" aria-controls="role-inspector">
+              <span class="crew-status" data-role-status data-i18n="waiting">待命</span>
+              <svg class="avatar" viewBox="0 0 128 138" aria-hidden="true">
+                <path class="shadow" d="M29 129c9-12 61-14 73 0-14 8-58 9-73 0Z"></path>
+                <path class="body" d="M41 91c9-9 37-9 46 0l7 34H34Z"></path>
+                <path class="arm" d="m42 99-16 13 8 9 17-14m35-8 17 14-8 9-18-15"></path>
+                <circle class="head" cx="64" cy="58" r="37"></circle>
+                <path class="hair" d="M30 57c0-26 14-42 34-42 21 0 35 16 35 42-18-12-51-12-69 0Z"></path>
+                <path class="accessory" d="M31 39c4-19 17-29 33-29s29 10 33 29Z"></path><path class="accessory-line" d="M26 40h76M64 11v24"></path>
+                <circle class="eye" cx="50" cy="62" r="3.5"></circle><circle class="eye" cx="77" cy="62" r="3.5"></circle><path class="smile" d="M57 74c5 4 10 4 15 0"></path>
+                <path class="accessory-line" d="m92 96 12 12m-4-18 10 10-13 13-10-10Z"></path>
+              </svg>
+              <span class="crew-copy"><strong data-role-title>执行者</strong><small data-role-name>builder</small></span>
+            </button>
+
+            <button class="crew-card crew-tester" data-role="tester" type="button" aria-controls="role-inspector">
+              <span class="crew-status" data-role-status data-i18n="waiting">待命</span>
+              <svg class="avatar" viewBox="0 0 128 138" aria-hidden="true">
+                <path class="shadow" d="M29 129c9-12 61-14 73 0-14 8-58 9-73 0Z"></path>
+                <path class="body" d="M42 91c9-9 35-9 44 0l8 34H34Z"></path>
+                <path class="arm" d="M42 99 25 112l8 9 18-14m35-8 15 12-7 9-17-13"></path>
+                <circle class="head" cx="64" cy="57" r="37"></circle>
+                <path class="hair" d="M29 53c2-25 17-39 36-39 22 0 35 16 34 41-9-5-15-13-18-22-13 12-30 18-52 20Z"></path>
+                <path class="glasses" d="M36 50h27v18H36zm29 0h27v18H65z"></path><path class="accessory-line" d="M63 57h2"></path>
+                <circle class="eye" cx="50" cy="59" r="3"></circle><circle class="eye" cx="78" cy="59" r="3"></circle><path class="smile" d="M57 75c5 3 10 3 15 0"></path>
+                <circle class="accessory" cx="99" cy="104" r="12"></circle><path class="accessory-line" d="m108 113 9 9"></path>
+              </svg>
+              <span class="crew-copy"><strong data-role-title>测试者</strong><small data-role-name>tester</small></span>
+            </button>
+
+            <button class="crew-card crew-reviewer" data-role="reviewer" type="button" aria-controls="role-inspector">
+              <span class="crew-status" data-role-status data-i18n="waiting">待命</span>
+              <svg class="avatar" viewBox="0 0 128 138" aria-hidden="true">
+                <path class="shadow" d="M29 129c9-12 61-14 73 0-14 8-58 9-73 0Z"></path>
+                <path class="body" d="M42 91c9-9 35-9 44 0l8 34H34Z"></path>
+                <path class="arm" d="M42 99 26 112l8 9 17-14m35-8 16 12-8 10-17-14"></path>
+                <circle class="head" cx="64" cy="57" r="37"></circle>
+                <path class="hair" d="M30 54c0-25 14-40 34-40 21 0 35 16 35 41-10-3-19-12-23-22-11 11-26 17-46 21Z"></path>
+                <circle class="eye" cx="49" cy="60" r="3.5"></circle><circle class="eye" cx="78" cy="60" r="3.5"></circle>
+                <circle class="glasses" cx="78" cy="60" r="11"></circle><path class="accessory-line" d="m86 68 7 13"></path><path class="smile" d="M57 74c5 3 10 3 15 0"></path>
+                <path class="accessory" d="M45 100h34v25H45z"></path><path class="accessory-line" d="M52 108h20m-20 7h14"></path>
+              </svg>
+              <span class="crew-copy"><strong data-role-title>审查者</strong><small data-role-name>reviewer</small></span>
+            </button>
+
+            <button class="crew-card crew-archivist" data-role="archivist" type="button" aria-controls="role-inspector">
+              <span class="crew-status" data-role-status data-i18n="waiting">待命</span>
+              <svg class="avatar robot-avatar" viewBox="0 0 128 138" aria-hidden="true">
+                <path class="shadow" d="M29 129c9-12 61-14 73 0-14 8-58 9-73 0Z"></path>
+                <path class="body" d="M39 91h50l7 34H32Z"></path>
+                <path class="arm" d="m39 99-15 13 8 9 16-14m41-8 15 13-8 9-16-14"></path>
+                <rect class="robot-head" x="28" y="22" width="72" height="67" rx="25"></rect>
+                <path class="accessory-line" d="M64 22V12m0 0 8-6"></path><circle class="accessory" cx="74" cy="5" r="5"></circle>
+                <rect class="robot-screen" x="38" y="42" width="52" height="30" rx="13"></rect>
+                <circle class="robot-eye" cx="51" cy="57" r="5"></circle><circle class="robot-eye" cx="77" cy="57" r="5"></circle>
+                <path class="smile" d="M57 78h14"></path>
+                <path class="accessory" d="M46 101h36v24H46Z"></path><path class="accessory-line" d="M46 108h36m-23 7h10"></path>
+              </svg>
+              <span class="crew-copy"><strong data-role-title>归档者</strong><small data-role-name>archivist</small></span>
+            </button>
+          </div>
+
+          <div class="crew-boundary" role="note">
+            <span aria-hidden="true">i</span>
+            <p><strong data-i18n="avatarBoundaryTitle">Q 版形象仅用于职责示意</strong><span data-i18n="avatarBoundaryText">它们不是真人，也不表示已有六个自主模型连接或正在后台执行。</span></p>
+          </div>
+
+          <div class="role-inspector" id="role-inspector" aria-live="polite">
+            <div class="role-inspector-icon" id="role-inspector-icon" aria-hidden="true">✦</div>
+            <div>
+              <p id="role-inspector-name" data-i18n="selectRole">选择一项协作职责查看说明</p>
+              <span id="role-inspector-description" data-i18n="roleHint">职责状态严格来自当前服务端快照。</span>
+            </div>
+          </div>
+        </div>
+
+        <aside class="guide-panel glass-card" aria-labelledby="guide-title">
+          <div class="guide-number" aria-hidden="true"><span id="guide-step-number">01</span></div>
+          <p class="section-kicker" data-i18n="nextMove">NEXT MOVE</p>
+          <h2 id="guide-title" data-i18n="waitingGuide">正在准备下一步…</h2>
+          <p class="guide-description" id="guide-description" data-i18n="waitingGuideDescription">本地服务返回引导后即可继续。</p>
+
+          <div class="active-role-line">
+            <span data-i18n="activeRole">下一步职责</span>
+            <strong id="active-role-label">—</strong>
+          </div>
+
+          <button class="primary-button" id="next-step" type="button" disabled>
+            <span id="next-label" data-i18n="nextStep">推进下一步</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m-5-5 5 5-5 5"></path></svg>
+            <span class="button-loader" aria-hidden="true"></span>
+          </button>
+
+          <p class="guide-safety"><span aria-hidden="true">◆</span><span data-i18n="receiptOnly">界面只呈现服务端返回的事件，不模拟执行成功。</span></p>
+
+          <div class="error-banner" id="error-banner" role="alert" hidden>
+            <span aria-hidden="true">!</span>
+            <p id="error-message"></p>
+            <button type="button" id="retry-button" data-i18n="retry">重新连接</button>
+          </div>
+
+          <div class="done-banner" id="done-banner" hidden>
+            <span aria-hidden="true">✓</span>
+            <div><strong data-i18n="routeDone">七步已完成</strong><small data-i18n="routeDoneHint">所有展示均来自最终快照。</small></div>
+          </div>
+
+          <div class="reset-zone">
+            <button class="reset-button" id="reset-button" type="button" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2-5.3M4 4v6h6"></path></svg>
+              <span id="reset-label" data-i18n="reset">重置演示</span>
+            </button>
+            <small id="reset-hint" data-i18n="resetHint">需二次点击确认，避免误触。</small>
+          </div>
+        </aside>
+      </section>
+
+      <section class="lower-grid">
+        <div class="events-panel glass-card" aria-labelledby="events-title">
+          <div class="panel-heading">
+            <div>
+              <p class="section-kicker" data-i18n="receiptStream">RECEIPT STREAM</p>
+              <h2 id="events-title" data-i18n="eventTimeline">事件回执时间线</h2>
+            </div>
+            <span class="count-pill"><span id="event-count">0</span> <span data-i18n="events">条</span></span>
+          </div>
+          <ol class="event-list" id="event-list" aria-live="polite" aria-relevant="additions"></ol>
+          <div class="empty-state" id="event-empty">
+            <span aria-hidden="true">⌁</span>
+            <p data-i18n="noEvents">尚无回执。推进第一步后，服务端事件会出现在这里。</p>
+          </div>
+        </div>
+
+        <div class="records-panel glass-card" aria-labelledby="records-title">
+          <div class="panel-heading">
+            <div>
+              <p class="section-kicker" data-i18n="traceDesk">TRACE DESK</p>
+              <h2 id="records-title" data-i18n="recordsTitle">记录与证据明细</h2>
+            </div>
+            <span class="privacy-chip" data-i18n="localSnapshot">本地快照</span>
+          </div>
+
+          <div class="record-groups" id="record-groups">
+            <details class="record-group" data-record-key="task">
+              <summary><span><i class="record-icon" aria-hidden="true">T</i><b data-i18n="taskRecord">任务 Task</b></span><em data-record-count>0</em></summary>
+              <div class="record-list" data-record-list></div>
+            </details>
+            <details class="record-group" data-record-key="sessions">
+              <summary><span><i class="record-icon" aria-hidden="true">S</i><b data-i18n="sessions">会话 Sessions</b></span><em data-record-count>0</em></summary>
+              <div class="record-list" data-record-list></div>
+            </details>
+            <details class="record-group" data-record-key="runs">
+              <summary><span><i class="record-icon" aria-hidden="true">R</i><b data-i18n="runs">运行 Runs</b></span><em data-record-count>0</em></summary>
+              <div class="record-list" data-record-list></div>
+            </details>
+            <details class="record-group" data-record-key="evidence">
+              <summary><span><i class="record-icon" aria-hidden="true">E</i><b data-i18n="evidence">证据 Evidence</b></span><em data-record-count>0</em></summary>
+              <div class="record-list" data-record-list></div>
+            </details>
+            <details class="record-group" data-record-key="checkpoints">
+              <summary><span><i class="record-icon" aria-hidden="true">C</i><b data-i18n="checkpoints">检查点 Checkpoints</b></span><em data-record-count>0</em></summary>
+              <div class="record-list" data-record-list></div>
+            </details>
+            <details class="record-group" data-record-key="knowledge">
+              <summary><span><i class="record-icon" aria-hidden="true">K</i><b data-i18n="knowledge">范围内知识 Scoped Knowledge</b></span><em data-record-count>0</em></summary>
+              <div class="record-list" data-record-list></div>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="truth-strip" aria-label="Demo boundary">
+        <span class="truth-icon" aria-hidden="true">i</span>
+        <p><strong data-i18n="demoBoundary">演示边界：</strong> <span data-i18n="demoBoundaryText">这是离线、引导式、确定性的产品演示，不是生产调度器，也不会访问真实知识库或执行外部任务。</span></p>
+      </section>
+    </main>
+
+    <footer>
+      <span>Qingtian AI · <span data-i18n="footerMode">Offline guided demo</span></span>
+      <span id="last-updated" aria-live="polite"></span>
+    </footer>
+
+    <noscript>
+      <div class="noscript">此演示需要 JavaScript 来读取本地确定性快照。</div>
+    </noscript>
+  </body>
+</html>

@@ -1,170 +1,69 @@
-# Adoption guide
+# 真实引擎接入手册
 
-This guide starts with synthetic offline behavior and adds private project data only
-after the storage and authority boundaries are understood.
+[安装](../README.md) 后用 `qingtian quickstart --open` 启动空任务控制台。`selftest` 只跑隔离合成检查，不调用模型；缺 Git/Codex 不影响看板启动。
 
-## 1. Evaluate the distribution
+## 状态与进程
 
-Use Linux or macOS with Python 3.11 or newer. Windows users should use WSL2. Create an
-isolated environment and install the project:
+全局选项放在子命令前：
 
 ```bash
-git clone https://github.com/ai-partner-lab/qingtianAI.git
-cd qingtianAI
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -e '.[pdf,dev]'
-python -m unittest discover -s tests -v
+qingtian --data-dir /absolute/private/engine --workspace /absolute/authorized/workspace init
+qingtian --data-dir /absolute/private/engine --workspace /absolute/authorized/workspace start --port 8766 --mode manual --open
+qingtian --data-dir /absolute/private/engine status --port 8766
+qingtian --data-dir /absolute/private/engine stop
 ```
 
-Run the synthetic control-plane flow before adding any provider or project adapter:
+同数据目录有实例锁；端口/模式/目录身份不一致会拒绝复用。不要复制另一台电脑的 PID、活动库或旧任务启动。导入要单独明确操作，不等于恢复授权。停止控制台不会自动取消独立 Worker；取消任务用 `qingtian cancel TASK_ID`。
+
+manual 可写、允许明确执行，只关闭后台自动领取/重试/补证。auto 必须明确开启，并先用一次性项目验收。
+
+## 项目与执行
 
 ```bash
-qingtian doctor
-qingtian demo --db /tmp/qingtian-evaluation/control.db
+qingtian project register sample --repo /absolute/your-repo --base dev --role backend --role qa
+qingtian task add --title "Add one small test" --project sample --owner backend --worker cli
+qingtian dispatch TASK_ID --prompt-file /absolute/private/instructions.md
+qingtian task show TASK_ID
 ```
 
-The demo is offline and should emit a `RUNNING` Task, an `ACTIVE` Session, a
-`SUCCEEDED` Run, a checkpoint that references recorded Evidence, and a scoped
-knowledge search result. It demonstrates durable primitives rather than closing the
-Task lifecycle on an adopter's behalf.
+注册已有 Git 仓库和开发基线；受保护主分支不能作为基线。工作在独立 worktree，不相关的母仓库未提交修改不应混入。可选 scope 将 Codex 工作目录设为工作树内对应子目录，并校验真实路径不越界；它不是独立权限围栏，实际权限仍依赖授权任务、Codex sandbox 与本机权限。
 
-## 2. Choose private storage boundaries
+`project remove sample` 只删注册，不删仓库。私有注册表默认 `config/projects.local.json` 位于数据目录；可用绝对 `QINGTIAN_PROJECTS_CONFIG` 覆盖。
 
-Use separate access-controlled locations for:
+## 规划读取范围
 
-- the control-plane database;
-- each Knowledge Hub data root;
-- provider credentials and configuration;
-- logs, receipts, backups, and exported release artifacts.
+默认确定性 Planner 读取文本与附件元数据，不声称有 OCR/图片语义理解。
 
-Do not place generated knowledge data inside this source checkout. This repository's
-ignore rules cover common local paths but do not protect data written under an
-unexpected name or committed in earlier history.
+显式 `QINGTIAN_INTAKE_PLANNER=codex` 会调用真实模型规划，使用 `--workspace`（默认启动 cwd）。**项目执行 allowlist 不约束该规划读取范围**。请选经授权的干净 workspace；不要从含不应发送给模型的资料目录开启。规划用 read-only/ephemeral；账户和数据政策由使用者负责。
 
-## 3. Model project work
+代码执行需要安装/登录 Codex、可用模型、high 以上推理。不要把密钥写进 prompt、仓库或工单。[官方执行说明](https://learn.chatgpt.com/docs/non-interactive-mode)
 
-Define a stable, non-sensitive project identifier and map your lifecycle into the
-portable Task, Session, and Run states. Preserve these rules:
+## 验收与反馈
 
-- create one bounded Task for one objective and acceptance set;
-- use the Task compare-and-swap revision for competing task writers;
-- attach execution context to a Session;
-- use a unique idempotency key for each logically repeatable Run;
-- keep uncertain side effects `UNKNOWN` until an authoritative reconciliation;
-- attach Evidence to the exact Task, Session, or Run it supports;
-- checkpoint references and next steps before transferring ownership or machines.
-
-Do not encode credentials, full conversations, or unbounded provider payloads in
-control records.
-
-## 4. Add a provider adapter
-
-Start from the offline echo adapter and implement the provider interface behind the
-gateway. Before enabling real traffic, define:
-
-- secret loading and rotation;
-- allowed model routes and data classifications;
-- request size, timeout, retry, concurrency, and budget limits;
-- idempotency and reconciliation behavior;
-- provider retention and training settings;
-- privacy-safe request and response evidence;
-- exact model lineage: set `ProviderResponse.reported_model` to the model that actually
-  handled the request, or `None` (JSON `null`) when the provider cannot determine it;
-- a disable switch and rollback procedure.
-
-Test failure, timeout, acknowledgement loss, malformed response, and retry paths. A
-transport failure must not be treated as proof that the remote action did not happen.
-
-## 5. Add a project adapter and verification
-
-Copy the synthetic adapter example and define checks with explicit side-effect classes.
-Keep read-only checks as the default. Only enable local writes for checks that are
-reviewed and reversible. `--execute-trusted-adapter` acknowledges that declared
-commands can execute with the current user's permissions; it is not a sandbox.
-
-Store the resulting receipt in an access-controlled location and validate it against
-the published schema before using it as a release input.
-
-## 6. Initialize a Knowledge Hub
-
-Create a new empty private directory and point it at a project workspace you are
-authorized to read:
+退出码 0 不等于 DONE。用独立检查确认真实产物后，才明确登记 verified：
 
 ```bash
-mkdir -p /path/to/private-knowledge-home
-cd /path/to/private-knowledge-home
-qingtian-kb init --workspace /absolute/path/to/project --project example-project
+qingtian task evidence TASK_ID test "your private verification receipt locator" --verified
+qingtian task evidence TASK_ID commit "your verified commit hash" --verified
+qingtian reconcile
+qingtian report
+qingtian feedback --consumer maintainer --peek
 ```
 
-Initialization creates `.qingtian-knowledge-root`, `config/sources.json`, and
-`vault/`. The first ingestion creates the local `.state/` index and writes an
-ingestion receipt into the Vault. Review `config/sources.json` before ingestion.
-Start with the smallest useful source root, narrow include patterns, hard exclusions,
-practical size limits, and explicit evidence and privacy metadata.
+这些值是占位，不能原样当通过证据。`--verified` 是操作者的信任声明，不会自动执行测试。部署/浏览器等 profile 有其他要求，真实脚本由项目提供。
 
-Never aim discovery at a home directory, filesystem root, credential directory,
-dependency tree, production export, unrestricted shared drive, or unrelated worktree.
-The bundled example is structural guidance, not authorization to read a real source.
+## 知识与验收
 
-## 7. Plan, ingest, and validate
+初始化并审查自己的知识工作区后：
 
 ```bash
-qingtian-kb doctor
-qingtian-kb plan
-qingtian-kb ingest
-qingtian-kb validate
-qingtian-kb stats
+qingtian knowledge configure --root /absolute/private/knowledge
+qingtian knowledge status
+qingtian knowledge disable
 ```
 
-Review the proposed read set before ingestion. Afterward, inspect conflicts, stale
-items, quarantine metadata, review state, source coverage, and the ingestion receipt.
-A zero exit status means the local operation completed its checks; it does not approve
-candidate content or prove an external release.
+配置默认在数据目录 `config/knowledge.local.json`，可用绝对 `QINGTIAN_KNOWLEDGE_CONFIG` 覆盖。内置模块无需知识目录启动脚本；配置操作不采集/查询，关闭不删除资料。
 
-On macOS, `qingtian-kb open-vault` can open the generated Vault in Obsidian. On Linux
-or WSL2, open the private `vault/` directory with your chosen Markdown tool.
+接入验收使用新的一次性 Git 项目，记录包版本、环境、新 task/run/session、退出码、Git 产物和独立测试。fake process、合成 tour 和旧动画不能代替真实 CLI E2E。
 
-## 8. Compose the layers explicitly
-
-Use the Knowledge Hub provider contract over standard input and treat each result
-according to its authority and usage constraint. An adapter may:
-
-1. authenticate and authorize the caller outside the reference provider;
-2. request a bounded project, retrieval mode, and result count;
-3. supply returned excerpts to one control-plane Run;
-4. record result identifiers, source/content hashes, mode, and constraints as Evidence;
-5. require human review before promoting a retrieved claim into scoped control-plane
-   knowledge.
-
-Repository-derived `sqlite-index` material with unknown repository authority must
-return no result in `approved` or `candidate` mode. An explicit `history` request may
-return an E1 unknown-authority item only as a non-authoritative investigation lead
-with `eligible_for_generation=false`; keep it out of generation context and
-current-product claims. Apply the separate review, freshness, conflict,
-classification, and provenance gates to Human Vault notes.
-
-Do not connect the two SQLite databases directly, infer authority from relevance, or
-copy a private Vault wholesale into run metadata.
-
-## 9. Prepare production operations
-
-Before production traffic, complete the identity, authorization, encryption, auditing,
-retention, deletion, backup, restore, capacity, observability, migration, incident,
-and emergency-disable controls in [Architecture](ARCHITECTURE.md). Run restore and
-side-effect reconciliation exercises, not just happy-path tests.
-
-## 10. Upgrade and transfer safely
-
-1. Pin and review the exact release or commit.
-2. Back up the control database and the Knowledge Hub recovery set separately.
-3. Review schema, lifecycle, and migration changes.
-4. Test against disposable synthetic storage.
-5. Run `doctor`, verification, ingestion planning, and validation.
-6. Confirm rollback and `UNKNOWN` reconciliation paths.
-7. Transfer private data only through an approved encrypted channel.
-
-The Knowledge Hub's search database is rebuildable. Restore the reviewed Vault,
-managed baseline, and matching source registry together; verify hashes and rebuild the
-index before enabling retrieval.
+支持 macOS/Linux POSIX；原生 Windows 不支持，WSL2 应独立验收。当前没有团队身份认证/RBAC，禁止当作公网服务部署。

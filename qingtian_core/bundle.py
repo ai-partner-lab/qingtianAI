@@ -31,8 +31,11 @@ EXCLUDED_PARTS = {
 }
 EXCLUDED_NAMES = {".DS_Store", "MANIFEST.sha256"}
 FORBIDDEN_EXACT_PATHS = {"config/sources.json"}
-FORBIDDEN_SUFFIXES = (".db", ".sqlite", ".sqlite3", ".key", ".pem", ".p12", ".pfx")
+FORBIDDEN_SUFFIXES = (".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm",
+                      ".sqlite-wal", ".sqlite-shm", ".sqlite3-wal", ".sqlite3-shm",
+                      ".key", ".pem", ".p12", ".pfx")
 FORBIDDEN_DATA_PARTS = {
+    ".data",
     ".state",
     "checkpoints",
     "receipts",
@@ -74,6 +77,7 @@ ALLOWED_ROOT_DIRECTORIES = {
     "docs",
     "examples",
     "qingtian_core",
+    "qingtian_engine",
     "qingtian_kb",
     "schemas",
     "scripts",
@@ -107,7 +111,7 @@ def _forbidden_relative(relative: PurePosixPath, *, is_dir: bool) -> bool:
             if lowered == ".env.example" and is_final and not is_dir:
                 continue
             return True
-        if lowered.endswith(FORBIDDEN_SUFFIXES) or lowered.endswith(".egg-info"):
+        if lowered.endswith(FORBIDDEN_SUFFIXES) or lowered.endswith((".egg-info", ".local.json", ".pid")):
             return True
     return False
 
