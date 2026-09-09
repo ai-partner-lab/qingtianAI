@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager, ExitStack, redirect_stdout
 from http.client import HTTPConnection
-from http.server import ThreadingHTTPServer
 import io
 import json
 import os
@@ -18,6 +17,7 @@ from unittest.mock import patch
 
 from qingtian_engine import cli, entrypoint, server
 from qingtian_engine.intake import DeterministicPlannerAdapter
+from qingtian_engine.server import LoopbackThreadingHTTPServer
 
 
 class TourReadonlyTest(unittest.TestCase):
@@ -97,7 +97,7 @@ class TourReadonlyTest(unittest.TestCase):
 
         def factory(address, handler):
             self.assertEqual(address, ("127.0.0.1", 0))
-            httpd = ThreadingHTTPServer(address, handler)
+            httpd = LoopbackThreadingHTTPServer(address, handler)
             captured.append(httpd)
             bound.set()
             return httpd
@@ -116,7 +116,7 @@ class TourReadonlyTest(unittest.TestCase):
                 bound.set()
 
         with ExitStack() as stack:
-            stack.enter_context(patch.object(server, "ThreadingHTTPServer", factory))
+            stack.enter_context(patch.object(server, "LoopbackThreadingHTTPServer", factory))
             stack.enter_context(patch.object(server.signal, "signal"))
             stack.enter_context(patch.object(server, "threading", SimpleNamespace(
                 Event=FastWatchdogEvent, Thread=threading.Thread,

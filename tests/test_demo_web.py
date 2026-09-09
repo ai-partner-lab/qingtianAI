@@ -228,6 +228,33 @@ class DemoHTTPTest(unittest.TestCase):
         self.assertEqual(self.server.demo.snapshot(), before)
         self.assertFalse(self.server.capabilities._processes)
 
+    def test_nested_api_check_does_not_require_reverse_dns_in_its_child(self) -> None:
+        before = self.server.demo.snapshot()
+        real_popen = subprocess.Popen
+        probe = (
+            "import runpy, socket, sys\n"
+            "def forbidden(*args, **kwargs):\n"
+            "    raise AssertionError('loopback startup attempted reverse DNS')\n"
+            "socket.getfqdn = forbidden\n"
+            "sys.argv = ['qingtian_core.capability_checks', '--capability', 'api-e2e']\n"
+            "runpy.run_module('qingtian_core.capability_checks', run_name='__main__')\n"
+        )
+
+        def guarded_child(command, *args, **kwargs):
+            self.assertEqual(command, [sys.executable, "-B", "-m",
+                                      "qingtian_core.capability_checks", "--capability", "api-e2e"])
+            return real_popen([sys.executable, "-B", "-c", probe], *args, **kwargs)
+
+        with patch("qingtian_core.capability_checks.subprocess.Popen", side_effect=guarded_child) as child:
+            status, result = self.post("/api/capabilities/run", {"capability_id": "api-e2e"})
+        child.assert_called_once()
+        self.assertEqual(status, 200)
+        self.assertEqual(result["status"], "passed", result)
+        self.assertEqual(len(result["checks"]), 16)
+        self.assertEqual(len(result["task_ids"]), 1)
+        self.assertEqual(self.server.demo.snapshot(), before)
+        self.assertFalse(self.server.capabilities._processes)
+
     def test_capability_run_rejects_parameter_injection_and_invalid_boundaries(self) -> None:
         before = self.server.demo.snapshot()
         with patch.object(self.server.capabilities, "run") as run:
@@ -497,6 +524,15 @@ class DemoHTTPTest(unittest.TestCase):
 
 
 class DemoCliTest(unittest.TestCase):
+    def test_numeric_loopback_bind_never_performs_reverse_dns(self) -> None:
+        with patch("socket.getfqdn", side_effect=AssertionError("unexpected reverse DNS")) as resolver:
+            with DemoHTTPServer(0) as server:
+                self.assertEqual(server.server_name, "127.0.0.1")
+                self.assertEqual(server.server_address, ("127.0.0.1", server.server_port))
+                self.assertGreater(server.server_port, 0)
+                self.assertEqual(server.url, "http://127.0.0.1:{}".format(server.server_port))
+        resolver.assert_not_called()
+
     def test_cli_help_and_dispatch(self) -> None:
         arguments = parser().parse_args(["demo-web", "--port", "0", "--no-browser"])
         self.assertEqual(arguments.port, 0)

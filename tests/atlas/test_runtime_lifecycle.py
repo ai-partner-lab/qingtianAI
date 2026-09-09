@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest import mock
 
 from qingtian_engine import cli
+from qingtian_engine.server import ControlPlaneHandler, LoopbackThreadingHTTPServer
 from qingtian_engine.runtime import (
     InstanceLock,
     active_instance_pid,
@@ -165,6 +166,22 @@ class ServerLifecycleTest(unittest.TestCase):
             "",
             (self.data_dir / "run" / "instance.lock").read_text(encoding="utf-8"),
         )
+
+    def test_loopback_server_bind_never_reverse_resolves(self) -> None:
+        with mock.patch.object(
+            socket,
+            "getfqdn",
+            side_effect=AssertionError("loopback bind attempted reverse resolution"),
+        ) as getfqdn:
+            server = LoopbackThreadingHTTPServer(
+                ("127.0.0.1", 0), ControlPlaneHandler
+            )
+        try:
+            getfqdn.assert_not_called()
+            self.assertEqual("127.0.0.1", server.server_name)
+            self.assertGreater(server.server_port, 0)
+        finally:
+            server.server_close()
 
 
 if __name__ == "__main__":

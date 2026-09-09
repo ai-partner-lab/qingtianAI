@@ -6,14 +6,13 @@ import tempfile
 import threading
 import time
 import unittest
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
 from qingtian_engine.db import Database
 from qingtian_engine.intake import IntakeService
 from qingtian_engine.runner import RunManager
-from qingtian_engine.server import ControlPlaneHandler
+from qingtian_engine.server import ControlPlaneHandler, LoopbackThreadingHTTPServer
 from qingtian_engine.service import ControlPlane
 
 
@@ -67,7 +66,7 @@ class IntakeHTTPTest(unittest.TestCase):
             "consecutive_errors": 0,
             "last_error_type": "",
         }
-        self.server = ThreadingHTTPServer(("127.0.0.1", 0), ControlPlaneHandler)
+        self.server = LoopbackThreadingHTTPServer(("127.0.0.1", 0), ControlPlaneHandler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
 

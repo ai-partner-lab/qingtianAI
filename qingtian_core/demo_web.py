@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 import secrets
 import socket
+from socketserver import TCPServer
 import tempfile
 from threading import RLock
 from typing import Any, Iterator
@@ -325,6 +326,13 @@ class DemoHTTPServer(ThreadingHTTPServer):
 
     daemon_threads = False
     block_on_close = True
+
+    def server_bind(self) -> None:
+        # HTTPServer.server_bind calls getfqdn() for informational server_name.
+        # This numeric-loopback-only server must not depend on reverse DNS,
+        # especially when an API check creates a fresh server in a subprocess.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
     def __init__(self, port: int = 8787):
         if type(port) is not int or not 0 <= port <= 65535:

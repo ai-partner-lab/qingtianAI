@@ -19,6 +19,8 @@ versioning once public releases are tagged.
 - Expand installation, public-boundary and multi-version regression checks.
 - Replace task-card fixed stage percentages with stage, elapsed runtime and actual
   recent Worker activity; explicitly label report indices as non-completion rates.
+- Start loopback engine and laboratory HTTP listeners without reverse DNS; keep
+  startup deadlines and cover unavailable DNS in direct and child-process tests.
 
 Commands shown in older entries below describe their historical version; use the
 `qingtian-lab` entry point for those laboratory commands on 0.5.

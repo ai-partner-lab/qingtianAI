@@ -138,7 +138,7 @@ class EngineModeTest(unittest.TestCase):
             thread.start.side_effect = target
             return thread
 
-        with patch.object(server, "ThreadingHTTPServer", return_value=fake_server), patch.object(
+        with patch.object(server, "LoopbackThreadingHTTPServer", return_value=fake_server), patch.object(
             server.threading, "Event", return_value=fake_event
         ), patch.object(server.threading, "Thread", side_effect=make_thread), patch.object(
             server.signal, "signal"
@@ -175,7 +175,7 @@ class EngineModeTest(unittest.TestCase):
             thread.start.side_effect = target
             return thread
 
-        with patch.object(server, "ThreadingHTTPServer"), patch.object(
+        with patch.object(server, "LoopbackThreadingHTTPServer"), patch.object(
             server.threading, "Event", return_value=fake_event
         ), patch.object(server.threading, "Thread", side_effect=make_thread), patch.object(
             server.signal, "signal"
@@ -221,7 +221,7 @@ class EngineModeTest(unittest.TestCase):
 
     def test_port_collision_precedes_any_automatic_scheduler_tick(self):
         coordinator = Mock()
-        with patch.object(server, "ThreadingHTTPServer", side_effect=OSError("fixture port busy")), patch.object(
+        with patch.object(server, "LoopbackThreadingHTTPServer", side_effect=OSError("fixture port busy")), patch.object(
             server, "RecoveryCoordinator", return_value=coordinator
         ), patch.dict(os.environ, {"QINGTIAN_RECOVERY_ENABLED": "1"}), self.assertRaises(OSError):
             server.serve("127.0.0.1", 0, self.root / "occupied-port", mode="auto")

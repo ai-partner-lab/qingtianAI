@@ -10,6 +10,7 @@ import time
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from socketserver import TCPServer
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qs, quote, urlparse
 
@@ -31,6 +32,19 @@ from .service import ControlPlane
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+
+class LoopbackThreadingHTTPServer(ThreadingHTTPServer):
+    """Threaded HTTP server that never reverse-resolves its bind address."""
+
+    def server_bind(self) -> None:
+        # HTTPServer.server_bind() calls socket.getfqdn(host) after binding only
+        # to populate server_name.  Name resolution is unnecessary for this
+        # loopback-only service and can stall indefinitely on some macOS hosts.
+        TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = str(host)
+        self.server_port = int(port)
 
 
 class ControlPlaneHandler(BaseHTTPRequestHandler):
@@ -517,7 +531,7 @@ def serve(
     paths = ensure_data_dirs(data_dir)
     lock = InstanceLock(paths["run"] / "instance.lock")
     lock.acquire()
-    server: Optional[ThreadingHTTPServer] = None
+    server: Optional[LoopbackThreadingHTTPServer] = None
     watchdog_stop = threading.Event()
     watchdog_thread: Optional[threading.Thread] = None
     published_pid = False
@@ -559,7 +573,7 @@ def serve(
 
         # Binding must succeed before an explicitly automatic startup can claim
         # work; a port collision is not permission to launch background workers.
-        server = ThreadingHTTPServer((host, port), handler_class)
+        server = LoopbackThreadingHTTPServer((host, port), handler_class)
         scheduler_result = _cycle()
         watchdog_health: Dict[str, Any] = {
             "last_success_at": utc_now(),

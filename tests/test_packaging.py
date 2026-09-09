@@ -55,7 +55,13 @@ class InstalledWheelTestCase(unittest.TestCase):
                         break
                     except (ConnectionError, OSError):
                         sleep(0.1)
-                self.assertIsNotNone(health, "installed real engine failed to start")
+                if health is None:
+                    output.seek(0)
+                    diagnostics = output.read()[-4096:].decode("utf-8", errors="replace")
+                    self.fail(
+                        "installed real engine failed to start within 15 seconds "
+                        f"(exit={process.poll()}): {diagnostics}"
+                    )
                 self.assertEqual(health["service"], "qingtian-engine")
                 self.assertEqual(health["mode"], "manual")
                 self.assertEqual(Path(health["data_dir"]), data.resolve())
