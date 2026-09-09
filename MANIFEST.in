@@ -14,6 +14,7 @@ include .gitignore
 recursive-include .github *.yml
 recursive-include qingtian_core *.py *.json
 recursive-include qingtian_engine *.py *.json *.html *.css *.js
+# Include repository CI tooling for tests run from an unpacked source distribution.
 recursive-include scripts *.py *.sh
 recursive-include qingtian_core/resources/demo *.html *.css *.js
 recursive-include qingtian_kb *.py *.json *.md *.txt

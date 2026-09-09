@@ -160,7 +160,7 @@ def _daily_report_markdown(
             window_end.isoformat(timespec="seconds"),
         ),
         "",
-        "| 事项 | 主责 | 状态 | 完成度 | 10字概要 | Commit/Test/Deploy/Smoke | 风险/下一步 |",
+        "| 事项 | 主责 | 状态 | 阶段指数（非完成率） | 10字概要 | Commit/Test/Deploy/Smoke | 风险/下一步 |",
         "|---|---|---|---:|---|---|---|",
     ]
     for row in rows:

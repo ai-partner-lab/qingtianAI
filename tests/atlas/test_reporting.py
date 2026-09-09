@@ -71,6 +71,8 @@ class ReportingTest(unittest.TestCase):
             self.service, datetime.now(timezone.utc).date()
         )
         self.assertIn("| 事项 | 主责 | 状态 |", compatible_markdown)
+        self.assertIn("| 阶段指数（非完成率） |", compatible_markdown)
+        self.assertNotIn("| 完成度 |", compatible_markdown)
 
     def test_internal_states_map_to_report_groups(self) -> None:
         planned = self.service.create_task(
@@ -224,7 +226,7 @@ class ReportingTest(unittest.TestCase):
         self.assertIn("｜${stateLabel}", app)
         self.assertIn("aria-pressed", app)
         self.assertIn("slice(0, 10)", app)
-        self.assertIn("｜${shortSummary}｜${progress}%", app)
+        self.assertIn("｜${shortSummary}｜阶段指数 ${progress}%（非完成率）", app)
         self.assertIn('"report-stat average"', app)
         self.assertNotIn('"report-stat progress"', app)
 

@@ -851,7 +851,7 @@ function reportCopyMarkdown() {
       .join("");
     const progress = Math.max(0, Math.min(100, Number(row.progress) || 0));
     const stateLabel = compactReportText(row.state_label, stateLabels[row.state] || row.state);
-    return `- ${title}｜${shortSummary}｜${progress}%｜${stateLabel}`;
+    return `- ${title}｜${shortSummary}｜阶段指数 ${progress}%（非完成率）｜${stateLabel}`;
   }).join("\n");
 }
 

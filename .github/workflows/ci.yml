@@ -26,6 +26,7 @@ jobs:
           from pathlib import Path, PurePosixPath
           import re
           import subprocess
+          from scripts.repository_boundary import semantic_text
 
           tracked = [
               item
@@ -105,14 +106,17 @@ jobs:
                   text = Path(raw).read_text(encoding="utf-8")
               except UnicodeDecodeError:
                   continue
-              folded = text.casefold()
+              semantic = semantic_text(raw, text)
+              folded = semantic.casefold()
               for value in business_terms:
                   if value.casefold() in folded:
                       content_violations.append(f"business-term:{raw}")
               for value in developer_paths:
-                  if value in text:
+                  if value in semantic:
                       content_violations.append(f"developer-path:{raw}")
               for label, pattern in secret_patterns.items():
+                  # Secrets always inspect the COMPLETE original file, including
+                  # every reviewed binary payload; semantic filtering is not used.
                   if pattern.search(text):
                       content_violations.append(f"{label}:{raw}")
 
@@ -337,6 +341,7 @@ jobs:
               if source_metadata["Name"] != "qingtian-ai" or source_metadata["Version"] != "0.5.0":
                   raise SystemExit("Source distribution metadata name/version mismatch")
               required_sdist = {
+                  "scripts/repository_boundary.py",
                   ".gitattributes",
                   ".github/workflows/ci.yml",
                   ".gitignore",

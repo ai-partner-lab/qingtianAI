@@ -136,6 +136,7 @@
     "schemas/session.schema.json",
     "schemas/task.schema.json",
     "schemas/verification-receipt.schema.json",
+    "scripts/repository_boundary.py",
     "tests/atlas/__init__.py",
     "tests/atlas/test_coordinator.py",
     "tests/atlas/test_engine_mode.py",
@@ -168,6 +169,7 @@
     "tests/test_engine_activity.py",
     "tests/test_engine_entrypoint.py",
     "tests/test_packaging.py",
-    "tests/test_provider.py"
+    "tests/test_provider.py",
+    "tests/test_repository_boundary.py"
   ]
 }
