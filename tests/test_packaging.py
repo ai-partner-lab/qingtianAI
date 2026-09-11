@@ -305,6 +305,8 @@ class InstalledWheelTestCase(unittest.TestCase):
                 source = source_root / candidate
                 if source.is_file():
                     shutil.copy2(source, build_source)
+            (build_source / 'scripts').mkdir()
+            shutil.copy2(source_root / 'scripts/build_sdist.py', build_source / 'scripts/build_sdist.py')
             shutil.copytree(
                 source_root / "qingtian_kb",
                 build_source / "qingtian_kb",
@@ -359,6 +361,11 @@ class InstalledWheelTestCase(unittest.TestCase):
             self.assertEqual(len(wheels), 1, built.stdout + built.stderr)
             wheel = wheels[0]
             with zipfile.ZipFile(wheel) as archive:
+                self.assertEqual(archive.comment, b'')
+                for item in archive.infolist():
+                    self.assertEqual(item.extra, b'', item.filename)
+                    self.assertEqual(item.comment, b'', item.filename)
+                    self.assertFalse(item.flag_bits & 1, item.filename)
                 names = set(archive.namelist())
                 entry_points_name = next(
                     name
@@ -401,6 +408,8 @@ class InstalledWheelTestCase(unittest.TestCase):
             self.assertIn("qingtian-lab = qingtian_core.cli:main", entry_points)
             self.assertIn("qingtian-kb = qingtian_kb.cli:main", entry_points)
             self.assertFalse(any(name.startswith("vault/") for name in names))
+            self.assertFalse(any(name.startswith(("docs/", "examples/", "output/")) for name in names))
+            self.assertFalse(any(name.endswith((".mp4", ".webm", ".pptx", ".excalidraw")) for name in names))
 
             virtual_environment = root / "venv"
             venv.EnvBuilder(with_pip=True, clear=True).create(virtual_environment)

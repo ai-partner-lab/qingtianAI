@@ -19,13 +19,28 @@ recursive-include scripts *.py *.sh
 recursive-include qingtian_core/resources/demo *.html *.css *.js
 recursive-include qingtian_kb *.py *.json *.md *.txt
 recursive-include tests *.py
+include tests/atlas/fixtures/schema10.sql
 recursive-include docs *.md
 recursive-include docs *.excalidraw
 recursive-include docs *.png
 recursive-include docs *.svg *.json *.py
+# Editorial showcase assets are an exact, reviewed exception, not a media glob.
+prune docs/assets
+include docs/assets/showcase/actual-board-public.png
+include docs/assets/showcase/poster.png
+include docs/assets/showcase/qingtian-showcase-short.mp4
 recursive-include contracts *.json *.md
 recursive-include config *.json *.md
 recursive-include examples *.json
+prune examples/showcase
+include examples/showcase/README.md
+include examples/showcase/scenario.json
+include examples/showcase/engine_bridge.py
+include examples/showcase/record.cjs
+include examples/showcase/verify_recording.py
+include examples/showcase/render.cjs
+include examples/showcase/qa_media.cjs
+include examples/showcase/check_playback.cjs
 recursive-include schemas *.json
 prune vault
 prune .state
@@ -45,6 +60,7 @@ prune .mypy_cache
 prune .ruff_cache
 prune .tox
 prune .nox
+prune output
 global-exclude __pycache__
 global-exclude *.py[cod]
 global-exclude *.egg-info

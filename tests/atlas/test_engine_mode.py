@@ -7,6 +7,7 @@ import os
 import tempfile
 import time
 import unittest
+from email.message import Message
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -52,7 +53,11 @@ class EngineModeTest(unittest.TestCase):
     def handler(self, path, payload=None, mode="manual"):
         handler = object.__new__(server.ControlPlaneHandler)
         handler.path = path
-        handler.headers = {"Host": "127.0.0.1:18766"}
+        handler.headers = Message()
+        handler.headers["Host"] = "127.0.0.1:18766"
+        wire = json.dumps(payload or {}).encode()
+        handler.headers["Content-Length"] = str(len(wire))
+        handler.rfile = io.BytesIO(wire)
         handler.server = Mock(server_address=("127.0.0.1", 18766))
         handler.service = self.service
         handler.manager = self.manager
@@ -228,21 +233,22 @@ class EngineModeTest(unittest.TestCase):
         coordinator.tick.assert_not_called()
 
     def test_explicit_api_dispatch_is_available_in_manual_mode(self):
-        task = self.service.create_task("Synthetic explicit task")
+        task = self.service.create_task("Synthetic explicit task", state="PLANNED")
         handler = self.handler(
             "/api/tasks/{}/dispatch".format(task["id"]),
-            {"instruction": "Only synthetic fixture", "resume": False},
+            {"instruction": "Only synthetic fixture", "resume": False, "expected_revision": task["revision"], "idempotency_key": "synthetic-dispatch"},
         )
         captured = []
 
         def fake_dispatch(task_id, prompt, resume=False):
             captured.append((task_id, prompt, prompt.read_text(), resume))
+            self.service.db.execute("INSERT INTO runs(id,task_id,attempt,adapter,command_summary,status,created_at) VALUES('synthetic-receipt',?,1,'synthetic','fixture','QUEUED','2001-01-01T00:00:00Z')", (task_id,))
             return {"id": "synthetic-receipt"}
 
-        with patch.object(self.manager, "dispatch", side_effect=fake_dispatch):
+        with patch.object(self.manager, "dispatch", side_effect=fake_dispatch), patch.object(self.manager, "validate_execution_parameters"):
             handler.do_POST()
         self.assertEqual(200, handler._json.call_args.args[0])
-        self.assertEqual("synthetic-receipt", handler._json.call_args.args[1]["run"]["id"])
+        self.assertEqual("synthetic-receipt", handler._json.call_args.args[1]["receipt"]["run_id"])
         self.assertEqual((task["id"], "Only synthetic fixture", False),
                          (captured[0][0], captured[0][2], captured[0][3]))
         self.assertFalse(captured[0][1].exists())

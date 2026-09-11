@@ -156,11 +156,13 @@ class ReportingTest(unittest.TestCase):
             "北京时间昨天完成但仍在24小时内",
             idempotency_key="report-recent-done",
         )
+        self.service.add_evidence(recent_done["id"], "artifact", "synthetic:report", verified=True)
         self.service.transition(recent_done["id"], "DONE", force=True)
         old_done = self.service.create_task(
             "超过24小时的完成项",
             idempotency_key="report-old-done",
         )
+        self.service.add_evidence(old_done["id"], "artifact", "synthetic:report", verified=True)
         self.service.transition(old_done["id"], "DONE", force=True)
         active = self.service.create_task(
             "跨午夜仍在执行",

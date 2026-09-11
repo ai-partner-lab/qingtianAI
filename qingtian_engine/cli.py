@@ -329,6 +329,8 @@ def configure_parser() -> argparse.ArgumentParser:
     add.add_argument("--worker", default="auto")
     add.add_argument("--owner", default="")
     add.add_argument("--reasoning", default="auto")
+    add.add_argument("--model")
+    add.add_argument("--speed", choices=("standard", "fast"))
     add.add_argument("--deploy", action="store_true")
     listing = task_sub.add_parser("list")
     listing.add_argument("--state", action="append")
@@ -366,6 +368,9 @@ def configure_parser() -> argparse.ArgumentParser:
         "heartbeat", help="Mark or refresh an externally executed task"
     )
     heartbeat.add_argument("task_id")
+    heartbeat.add_argument("--model")
+    heartbeat.add_argument("--reasoning")
+    heartbeat.add_argument("--speed", choices=("standard", "fast"))
     heartbeat.add_argument(
         "--mode", choices=("external", "delegated"), default="external"
     )
@@ -490,6 +495,8 @@ def main(argv: Optional[list] = None) -> int:
                     worker_type=args.worker,
                     owner_session=args.owner,
                     reasoning=args.reasoning,
+                    model=args.model,
+                    speed=args.speed,
                     requires_deploy=args.deploy,
                 )
             )
@@ -554,7 +561,8 @@ def main(argv: Optional[list] = None) -> int:
     elif args.command == "heartbeat":
         _json(
             service.heartbeat_task(
-                args.task_id, execution_mode=args.mode
+                args.task_id, execution_mode=args.mode, model=args.model,
+                reasoning=args.reasoning, speed=args.speed,
             )
         )
     elif args.command == "cancel":

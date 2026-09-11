@@ -16,6 +16,7 @@
     </div>
     <div class="top-actions">
       <button id="guideButton" class="secondary">能力与上手</button>
+      <button id="managerEntryButton" class="secondary">接入大管家</button>
       <button id="systemDetailsButton" class="secondary">系统详情</button>
       <button id="reportButton" class="secondary">过去24小时日报</button>
       <button id="newTaskButton" class="primary">交给擎天</button>
@@ -28,6 +29,34 @@
       <span id="runtimeMode" role="status">正在核对运行模式…</span>
       <small id="runtimePath">正在核对独立运行库。启动不会自动导入历史任务。</small>
     </section>
+    <nav class="release-view-tabs workspace-views" role="tablist" aria-label="工作总览、发布事实与任务规划">
+      <button id="clarityViewButton" type="button" role="tab" aria-selected="true" aria-pressed="true" aria-controls="clarityPanel">工作总览</button>
+      <button id="releaseViewButton" type="button" role="tab" aria-selected="false" aria-pressed="false" aria-controls="releasePanel" tabindex="-1">已发布上线</button>
+      <button id="taskViewButton" type="button" role="tab" aria-selected="false" aria-pressed="false" aria-controls="taskPanel" tabindex="-1">任务规划</button>
+    </nav>
+    <section id="clarityPanel" class="clarity-panel workspace" role="tabpanel" aria-labelledby="clarityViewButton" data-state="idle" data-stale="false">
+      <div class="section-head release-head">
+        <div><p class="eyebrow">OPERATIONS OVERVIEW</p><h2>工作总览</h2></div>
+        <button id="clarityRefresh" type="button" class="secondary">刷新总览</button>
+      </div>
+      <div class="clarity-content">
+        <p class="release-assurance">分类与来源是经审阅登记的声明，不是独立验证或执行许可。没有权威记录时显示未知；主责未登记不从角色或会话推测，实质进展不使用心跳或更新时间。</p>
+        <p id="claritySourceStatus" class="release-note">尚未读取来源状态</p>
+        <p id="clarityStatus" class="release-feedback" role="status" aria-live="polite">工作总览尚未读取；不能判断为空。</p>
+        <nav id="clarityCategories" class="clarity-categories" aria-label="七个工作区域及未知与历史"></nav>
+        <div class="clarity-toolbar">
+          <label for="claritySearch">搜索总览（含暂缓与历史）<input id="claritySearch" type="search" placeholder="搜索任务、字段或来源"></label>
+          <label for="clarityFilter">显示类别<select id="clarityFilter">
+            <option value="all">全部类别</option><option value="executing">正在执行</option><option value="internal">内部处理 / 评审</option><option value="pending_release">待发布</option><option value="user_action">待你处理</option><option value="external_blocked">外部阻塞</option><option value="deferred">暂缓 / 已暂停</option><option value="unclassified">未分类 / 待核对</option><option value="history">历史记录</option>
+          </select></label>
+        </div>
+        <p id="clarityLoadedScope" class="release-note">尚未取得快照</p>
+        <p id="clarityEmpty" class="release-empty" hidden>读取成功，当前投影没有任务记录。</p>
+        <section aria-label="同一精确范围的阻塞"><h3>阻塞范围与受影响任务</h3><p class="release-note">仅按后端给出的精确范围分组；入口只查看任务，不代表批量批准、授权或处理完成。</p><div id="clarityGroups" class="clarity-groups"></div></section>
+        <div id="clarityTasks" class="clarity-tasks" aria-label="工作总览任务"></div>
+      </div>
+    </section>
+    <div id="taskPanel" role="tabpanel" aria-labelledby="taskViewButton" hidden>
     <section class="mobile-action-overview" aria-label="人工动作概览">
       <button id="mobileActionBar" type="button" aria-expanded="false">
         <span id="mobileActionLabel">✓ 暂无需处理</span>
@@ -66,6 +95,28 @@
         </section>
       </aside>
     </div>
+    </div>
+    <section id="releasePanel" class="release-panel workspace" role="tabpanel" aria-labelledby="releaseViewButton" data-state="idle" data-stale="false" hidden>
+      <div class="section-head release-head">
+        <div><p class="eyebrow">RELEASE RECORDS</p><h2>已发布上线</h2></div>
+        <div class="release-actions">
+          <button id="releaseRefresh" type="button" class="secondary">刷新批次</button>
+          <button id="releaseRecordButton" type="button" class="secondary">登记回执（不执行发布）</button>
+        </div>
+      </div>
+      <div class="release-content">
+        <p id="releaseAssurance" class="release-assurance">这里展示登记的证据与人工核查，不是本系统独立重验。部署、启用、验收分别核查；Dev / Test 不代表 Prod 生产。核查信息均为回执登记来源，不是当前认证身份。</p>
+        <div class="release-toolbar">
+          <label for="releaseEnvironment">环境
+            <select id="releaseEnvironment"><option value="">全部</option><option value="dev">Dev</option><option value="test">Test</option><option value="prod">Prod（生产）</option></select>
+          </label>
+          <p id="releaseLoadedScope" class="release-note">尚未读取发布记录</p>
+        </div>
+        <p id="releaseStatus" class="release-feedback" role="status" aria-live="polite"></p>
+        <p id="releaseEmpty" class="release-empty" hidden>当前环境没有登记的发布批次。任务 DONE、CI/build 成功或提交记录不会自动成为已部署事实。</p>
+        <div id="releaseBatches" class="release-batches" aria-label="发布批次，最近在前"></div>
+      </div>
+    </section>
   </main>
 
   <dialog id="guideDialog" class="system-details-dialog" aria-label="能力与上手">
@@ -84,6 +135,53 @@
       <details><summary>核验负责人：证据与恢复</summary><p>未核验证据不放行 DONE。手动模式只对账；自动模式另有租约、幂等、并发上限、恢复和补证据流程。外部部署是否真实成功仍需项目提供验证信号。</p></details>
       <details><summary>知识负责人：可追溯引用</summary><p>只读检索当前 approved 知识；历史材料不能授权旧任务重跑。附带知识库构建工具，但不附带任何项目的知识内容。Dify 等平台未接线。</p></details>
     </details>
+  </dialog>
+
+  <dialog id="releaseRecordDialog" class="release-record-dialog" aria-labelledby="releaseRecordTitle" aria-describedby="releaseRecordNotice">
+    <div class="dialog-head release-head">
+      <h2 id="releaseRecordTitle">登记回执（不执行发布）</h2>
+      <button id="releaseRecordClose" type="button" class="icon" aria-label="关闭回执登记">×</button>
+    </div>
+    <p id="releaseRecordNotice" class="release-assurance">这是手动事实登记，不执行部署、启用、验收或任务派发。核查人、时间、方法均来自输入的回执，不代表当前认证身份；登记的证据与人工核查，不是本系统独立重验。</p>
+    <label class="release-input-label" for="releaseReceiptInput">新建批次 JSON 回执</label>
+    <textarea id="releaseReceiptInput" rows="14" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="releaseReceiptHelp" placeholder="粘贴符合接口合同的 JSON，先预览摘要，再明确点击登记"></textarea>
+    <p id="releaseReceiptHelp" class="release-note">idempotency_key 必填。重试请保留原 JSON 和幂等键。不要粘贴凭据；示例仅含合成未知状态，不能作为真实发布证据。</p>
+    <div class="release-actions release-record-actions">
+      <button id="releaseTemplateButton" type="button" class="secondary">填入合成模板</button>
+      <button id="releasePreviewButton" type="button" class="secondary">预览登记摘要</button>
+    </div>
+    <section id="releasePreviewSummary" class="release-preview" aria-label="请人工审阅的登记摘要" hidden></section>
+    <p id="releaseRecordFeedback" class="release-feedback" role="status" aria-live="polite"></p>
+    <div class="release-actions release-record-actions">
+      <button id="releaseConfirmButton" type="button" class="primary" disabled>确认摘要并登记（不执行发布）</button>
+    </div>
+  </dialog>
+
+  <dialog id="clarityCorrectionDialog" class="clarity-correction-dialog" aria-labelledby="clarityCorrectionTitle" aria-describedby="clarityCorrectionNotice">
+    <div class="dialog-head release-head"><h2 id="clarityCorrectionTitle">说明更正</h2><button id="clarityCorrectionClose" type="button" class="secondary">关闭并保留草稿</button></div>
+    <p id="clarityCorrectionNotice" class="release-assurance">说明更正，不等于解除真实依赖/授权/任务可调度/清理业务原字段。这里只登记独立展示说明；声明人和证据来源不代表已认证身份。原始事实改变后，更正需重新核对，旧值、新值与证据始终保留在审计记录中。</p>
+    <p id="clarityCorrectionTask" class="release-note"></p><p id="clarityCorrectionRevision" class="release-note"></p>
+    <button id="clarityCorrectionReload" type="button" class="secondary">读取当前版本（保留输入）</button>
+    <form id="clarityCorrectionForm" class="clarity-form">
+      <label class="clarity-check"><input id="clarityUseReason" type="checkbox" checked>更正阻塞说明 reason（勾选且留空表示清除展示覆盖）</label>
+      <label for="clarityReason">新的阻塞说明<textarea id="clarityReason" rows="3"></textarea></label>
+      <label class="clarity-check"><input id="clarityUseNext" type="checkbox" checked>更正下一步说明 next_action（勾选且留空表示清除展示覆盖）</label>
+      <label for="clarityNextAction">新的下一步说明<textarea id="clarityNextAction" rows="3"></textarea></label>
+      <label for="clarityCorrectionReason">为什么更正<textarea id="clarityCorrectionReason" rows="2" required></textarea></label>
+      <label for="clarityActor">声明人 ID<input id="clarityActor" required autocomplete="off"></label>
+      <p class="release-note">声明来源：declared_business_review。请填写实际审阅资料；这里不自动生成证据。</p>
+      <label for="claritySourceRef">证据引用 ref<input id="claritySourceRef" required autocomplete="off"></label>
+      <label for="claritySourceHash">证据 SHA256<input id="claritySourceHash" required pattern="[a-fA-F0-9]{64}" autocomplete="off" spellcheck="false"></label>
+      <label for="clarityObservedAt">事实观察时间（含时区的 ISO 时间）<input id="clarityObservedAt" required placeholder="YYYY-MM-DDTHH:mm:ssZ" autocomplete="off"></label>
+      <label for="clarityReviewedAt">审阅时间（含时区的 ISO 时间）<input id="clarityReviewedAt" required placeholder="YYYY-MM-DDTHH:mm:ssZ" autocomplete="off"></label>
+      <label for="clarityReviewer">审阅人<input id="clarityReviewer" required autocomplete="off"></label>
+      <p id="clarityIdempotency" class="release-note"></p>
+      <p class="release-note">预览不写入；只有明确点击确认才登记。请求结果不明时，原载荷与同一幂等键保留用于重试。修改任何输入会使预览失效。</p>
+      <button id="clarityCorrectionPreview" type="button" class="secondary">预览说明更正（只读）</button>
+      <section id="clarityCorrectionSummary" class="release-preview" aria-label="更正预览的旧值、新值与原始依据" hidden></section>
+      <p id="clarityCorrectionFeedback" class="release-feedback" role="status" aria-live="polite"></p>
+      <button id="clarityCorrectionConfirm" type="button" class="primary" disabled>人工确认并登记说明更正</button>
+    </form>
   </dialog>
 
   <dialog id="intakeDialog" class="intake-dialog" aria-label="交给擎天">
@@ -162,6 +260,10 @@
       <button type="button" class="icon close-system-details" aria-label="关闭系统详情">×</button>
     </div>
     <p class="system-details-note">主责会话与原始事件默认折叠，不占用首页决策视线。</p>
+    <details id="managerEntryDetails" open>
+      <summary>擎天大管家入口</summary>
+      <div id="managerEntry" class="sessions" role="status" aria-live="polite"></div>
+    </details>
     <details>
       <summary>主责会话</summary>
       <div id="sessions" class="sessions"></div>
@@ -175,8 +277,9 @@
   <dialog id="detailDialog">
     <div class="dialog-head">
       <div><p class="eyebrow">TASK DETAIL</p><h2 id="detailTitle">任务详情</h2></div>
-      <button type="button" class="icon close-detail">×</button>
+      <button type="button" class="icon close-detail" aria-label="关闭任务详情">×</button>
     </div>
+    <section id="detailConversation" class="detail-conversation" aria-label="执行会话"></section>
     <div id="detailBody"></div>
   </dialog>
 

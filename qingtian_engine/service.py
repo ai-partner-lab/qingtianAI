@@ -8,10 +8,15 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-from .config import runtime_policy
+from .config import load_policy, require_execution_model, runtime_policy, EXECUTION_MODELS, EXECUTION_SPEEDS
 from .db import Database, utc_now
+from .manager_entry import read_status as read_manager_entry_status
+from .releases import ReleaseService
+from .operations_clarity import (OperationsClarityService, OperationsError, completion_basis,
+                                 COMPLETION_ASSURANCE, native_basis, _id, _shape, _positive, _json, _version_for)
 from .redaction import fingerprint, redact_text, safe_event_payload
 from .router import route_task
+from .transactions import transaction_scope
 
 
 BOARD_STATES = (
@@ -25,6 +30,18 @@ BOARD_STATES = (
     "CANCELED",
 )
 ACTION_OWNER_KINDS = {"user", "external", "agent", "none"}
+
+
+class ActionConflict(ValueError):
+    """A user action changed after the client inspected it."""
+
+
+def human_action_version(task: Dict[str, Any]) -> str:
+    # The persisted counter, not content or wall-clock precision, distinguishes
+    # A -> B -> A and two identical action reissues. Clients treat this as opaque.
+    return "action:{}:{}".format(task["id"], task["action_revision"])
+
+
 WAITING_CATEGORY_LABELS = {
     "paused": "已暂停",
     "external": "外部等待",
@@ -239,9 +256,16 @@ def new_task_id() -> str:
 
 
 class ControlPlane:
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, *, manager_entry_workspace: Optional[Path] = None):
         self.db = db
+        self.manager_entry_workspace = manager_entry_workspace
         self.db.initialize()
+        self.releases = ReleaseService(self.db.connect)
+        self.operations_clarity = OperationsClarityService(self.db._read_connection, required_evidence=self._required_evidence_for_task,
+                                                          paused_predicate=is_paused_by_user)
+
+    def manager_entry_status(self) -> Dict[str, Any]:
+        return read_manager_entry_status(self.db.path.parent, workspace=self.manager_entry_workspace)
 
     def create_task(
         self,
@@ -269,6 +293,8 @@ class ControlPlane:
         parent_id: Optional[str] = None,
         source_request_id: str = "",
         evidence_profile: str = "auto",
+        model: Optional[str] = None,
+        speed: Optional[str] = None,
     ) -> Dict[str, Any]:
         clean_title = redact_text(title, max_chars=180)
         clean_scope = redact_text(scope_summary, max_chars=500)
@@ -284,8 +310,11 @@ class ControlPlane:
         route = route_task(clean_title, clean_scope, repository)
         selected_worker = route.worker_type if worker_type == "auto" else worker_type
         selected_owner = owner_session or route.owner_session
-        selected_reasoning = route.reasoning if reasoning == "auto" else reasoning
-        policy = runtime_policy(selected_reasoning)
+        selected_reasoning = reasoning
+        if reasoning == "auto":
+            selected_reasoning = None if "QINGTIAN_REASONING" in os.environ or selected_worker == "manager" else route.reasoning
+        policy = runtime_policy(selected_reasoning, requested_model=model, requested_speed=speed,
+                                role="manager" if selected_worker == "manager" else "executor")
         now = utc_now()
         task_id = new_task_id()
         selected_progress = STATE_PROGRESS.get(state, 0) if progress is None else progress
@@ -383,65 +412,143 @@ class ControlPlane:
             clean_due = None
             sensitive = False
         now = utc_now()
-        self.db.execute(
-            """
-            UPDATE tasks SET action_owner_kind=?, action_owner=?, action_text=?,
-                action_due=?, action_sensitive=?, updated_at=?
-            WHERE id=?
-            """,
-            (
-                clean_kind,
-                clean_owner,
-                clean_text,
-                clean_due,
-                int(bool(sensitive)),
-                now,
+        with self.db.connect() as connection, transaction_scope(connection, write=True):
+            changed = connection.execute(
+                """
+                UPDATE tasks SET action_owner_kind=?, action_owner=?, action_text=?,
+                    action_due=?, action_sensitive=?, updated_at=?
+                WHERE id=?
+                """,
+                (clean_kind, clean_owner, clean_text, clean_due, int(bool(sensitive)), now, task_id),
+            )
+            if changed.rowcount != 1:
+                raise KeyError("task not found")
+            task = dict(connection.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
+            inserted = self.db.add_event(
                 task_id,
-            ),
-        )
-        self.db.add_event(
-            task_id,
-            "task.human_action_changed",
-            producer,
-            "人工动作：{}".format(clean_kind),
-            "human-action:{}:{}:{}".format(
-                task_id, clean_kind, fingerprint("|".join((clean_owner, clean_text, clean_due or "")))
-            ),
-            {
-                "action_owner_kind": clean_kind,
-                "action_sensitive": bool(sensitive),
-                "state": self.get_task(task_id)["state"],
-            },
-        )
+                "task.human_action_changed",
+                producer,
+                "人工动作：{}".format(clean_kind),
+                "human-action:{}:{}".format(task_id, task["action_revision"]),
+                {
+                    "action_owner_kind": clean_kind,
+                    "action_sensitive": bool(sensitive),
+                    "action_revision": task["action_revision"],
+                    "state": task["state"],
+                },
+                occurred_at=now,
+                connection=connection,
+            )
+            if not inserted:
+                raise RuntimeError("action change audit was not inserted")
         return self.get_task(task_id)
 
-    def complete_human_action(self, task_id: str) -> Dict[str, Any]:
-        task = self.get_task(task_id)
-        if task.get("action_owner_kind") != "user":
-            raise ValueError("task has no user-owned action")
-        self.db.add_event(
-            task_id,
-            "task.human_action_completed",
-            "dashboard",
-            "用户已完成动作，重新进入内部验证",
-            "human-action-completed:{}:{}".format(
-                task_id, fingerprint(task.get("action_text", ""))
-            ),
-            {"state": task["state"]},
-        )
-        self.set_human_action(task_id, "none", producer="dashboard")
-        if task["state"] != "VERIFYING":
-            return self.transition(
-                task_id,
-                "VERIFYING",
-                producer="dashboard",
-                summary="人工动作完成，进入内部验证",
-                dedupe_key="human-action-verify:{}:{}".format(
-                    task_id, fingerprint(task.get("action_text", ""))
-                ),
-                force=True,
+    def complete_human_action(
+        self, task_id: str, expected_action_version: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Record reported completion for internal review, never authorization.
+
+        New clients send the version they inspected. Legacy callers that omit it
+        retain atomic current-action completion but cannot detect stale UI reads.
+        """
+        if expected_action_version is not None and (
+            not isinstance(expected_action_version, str) or not expected_action_version
+        ):
+            raise ValueError("expected_action_version must be a nonempty string")
+        with self.db.connect() as connection, transaction_scope(connection, write=True):
+            row = connection.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if row is None:
+                raise KeyError("task not found")
+            task = dict(row)
+            version = human_action_version(task)
+            if expected_action_version is not None and expected_action_version != version:
+                raise ActionConflict("action changed; reload the task before reporting completion")
+            if task.get("action_owner_kind") != "user":
+                raise ValueError("task has no user-owned action")
+            if task.get("action_sensitive"):
+                raise ValueError("sensitive actions require their explicit authorization workflow")
+            if (is_paused_by_user(task) or is_plan_only(task)
+                    or task["state"] in {"DONE", "CANCELED"}
+                    or task.get("imported_from")):
+                raise ValueError("this task cannot report user-action completion")
+            if connection.execute(
+                "SELECT 1 FROM runs WHERE task_id=? AND status IN ('QUEUED', 'RUNNING')",
+                (task_id,),
+            ).fetchone():
+                raise ActionConflict("task has an active run; reload the task")
+            now = utc_now()
+            connection.execute(
+                """UPDATE tasks SET action_owner_kind='none', action_owner='',
+                   action_text='', action_due=NULL, action_sensitive=0,
+                   state='VERIFYING', progress=?, blocking_reason='', updated_at=?
+                   WHERE id=?""",
+                (STATE_PROGRESS["VERIFYING"], now, task_id),
             )
+            for event_type, summary in (
+                ("task.human_action_completed", "用户报告动作已完成，等待内部复核；不代表审批或授权"),
+                ("task.human_action_changed", "人工动作：none"),
+                ("task.state_changed", "人工动作报告已收到，进入内部验证"),
+            ):
+                inserted = self.db.add_event(
+                    task_id, event_type, "dashboard", summary,
+                    "{}:{}:{}".format(event_type, task_id, version),
+                    {"state": "VERIFYING", "reported_action_revision": task["action_revision"]},
+                    occurred_at=now, connection=connection,
+                )
+                if not inserted:
+                    raise RuntimeError("action completion audit was not inserted")
         return self.get_task(task_id)
+
+    def report_human_action(self, task_id: str, expected_revision=None, idempotency_key=None) -> Dict[str, Any]:
+        _id(task_id)
+        try:
+            _positive(expected_revision)
+            _id(idempotency_key)
+        except OperationsError as exc:
+            raise OperationsError("请刷新并核对当前任务，再提交 expected_revision 和 idempotency_key") from exc
+        payload = {"expected_revision": expected_revision, "idempotency_key": idempotency_key}
+        with self.db.connect() as connection, transaction_scope(connection, write=True):
+            snapshot = self.operations_clarity.snapshot_from(connection)
+            task = next((t for t in snapshot["tasks"] if t["id"] == task_id), None)
+            if task is None:
+                raise OperationsError("task not found", "missing", 404)
+            existing = next((r for r in snapshot["reports"] if r["task_id"] == task_id and r["idempotency_key"] == idempotency_key), None)
+            if existing:
+                if existing["payload_json"] != _json(payload):
+                    raise OperationsError("idempotency key already has different content", "idempotency", 409)
+                return {**self._task_detail(connection, task), "report": json.loads(existing["receipt_json"]), "reused": True}
+            version = self.operations_clarity._bookkeeping(snapshot, task)
+            if expected_revision != version["revision"]:
+                raise OperationsError("任务或动作已变化，请刷新并重新核对", "stale", 409)
+            if task.get("action_sensitive"):
+                raise OperationsError("敏感待决事项不能通过普通处理声明清除；请在本任务原范围对应的授权流程处理。当前记录缺少结构化授权范围和渠道绑定，不能推定批准。", "forbidden", 403)
+            if is_paused_by_user(task) or is_plan_only(task) or task.get("imported_from") or task["state"] in {"PAUSED", "PLAN_ONLY", "CANCELED", "DONE", "FAILED", "RUNNING", "QUEUED"} or any(
+                r["task_id"] == task_id and r["status"] in {"QUEUED", "RUNNING"} for r in snapshot["runs"]
+            ):
+                raise OperationsError("当前状态或活动执行不允许处理声明，请刷新核对", "stale", 409)
+            if task.get("action_owner_kind") != "user" or not str(task.get("action_text") or "").strip():
+                raise OperationsError("task has no current ordinary user action", "stale", 409)
+            received = datetime.now(timezone.utc).isoformat()
+            report = {"id": str(uuid.uuid4()), "task_id": task_id, "revision": version["revision"] + 1,
+                      "idempotency_key": idempotency_key, "received_at": received,
+                      "native_baseline": {"revision": version["revision"], "basis_revision": version["basis_revision"], "native": native_basis(task)},
+                      "original_action": {k: task[k] for k in ("action_owner_kind", "action_owner", "action_text", "action_due", "action_sensitive")},
+                      "new_state": "VERIFYING", "actor": {"id": "unverified-dashboard-caller", "origin": "declared_ordinary_action_report"},
+                      "source": {"origin": "ordinary_action_declaration", "task_id": task_id}, "assurance": COMPLETION_ASSURANCE}
+            connection.execute("""UPDATE tasks SET action_owner_kind='none',action_owner='',action_text='',action_due=NULL,
+                action_sensitive=0,state='VERIFYING',progress=85,updated_at=? WHERE id=?""", (received, task_id))
+            current_revision = connection.execute("SELECT revision FROM operations_task_versions WHERE task_id=?", (task_id,)).fetchone()[0]
+            report["revision"] = current_revision  # Native action CAS also advances the operations revision.
+            connection.execute("INSERT INTO operations_human_action_reports VALUES(?,?,?,?,?,?,?)",
+                               (report["id"], task_id, report["revision"], idempotency_key, received, _json(payload), _json(report)))
+            inserted = self.db.add_event(task_id, "task.human_action_completed", "dashboard",
+                                         "已记录普通处理声明，进入任务证据门禁；不代表授权、部署或功能验收", "ordinary-report:" + report["id"],
+                                         {"state": "VERIFYING", "report_id": report["id"], "assurance": COMPLETION_ASSURANCE},
+                                         occurred_at=received, connection=connection)
+            if not inserted:
+                raise OperationsError("report audit event was not recorded", "stale", 409)
+            current = dict(connection.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
+            return {**self._task_detail(connection, current), "report": report, "reused": False}
 
     def remind_human_action(self, task_id: str) -> Dict[str, Any]:
         task = self.get_task(task_id)
@@ -464,32 +571,69 @@ class ControlPlane:
         return self.get_task(task_id)
 
     def get_task(self, task_id: str) -> Dict[str, Any]:
-        task = self.db.one("SELECT * FROM tasks WHERE id=?", (task_id,))
-        if not task:
-            raise KeyError("task not found: {}".format(task_id))
-        task["dependencies"] = self.db.all(
-            """
-            SELECT d.depends_on_id, d.relation, t.title, t.state
-            FROM task_dependencies d JOIN tasks t ON t.id=d.depends_on_id
-            WHERE d.task_id=?
-            """,
-            (task_id,),
-        )
-        task["evidence"] = self.db.all(
-            "SELECT kind, value, label, verified, created_at FROM evidence "
-            "WHERE task_id=? ORDER BY created_at DESC",
-            (task_id,),
-        )
-        task["events"] = self.db.all(
-            "SELECT event_type, producer, summary, payload_json, occurred_at "
-            "FROM events WHERE task_id=? AND event_type!='codex.event_skipped' "
-            "ORDER BY id DESC LIMIT 100",
-            (task_id,),
-        )
-        task["runs"] = self.db.all(
-            "SELECT * FROM runs WHERE task_id=? ORDER BY attempt DESC", (task_id,)
-        )
+        with self.db._read_connection() as connection, transaction_scope(connection):
+            task = connection.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if task is None:
+                raise KeyError("task not found: {}".format(task_id))
+            return self._task_detail(connection, dict(task))
+
+    def _task_detail(self, connection, native):
+        task = dict(native)
+        task["action_version"] = human_action_version(task)
+        task_id = task["id"]
+        queries = {
+            "dependencies": "SELECT d.depends_on_id,d.relation,t.title,t.state FROM task_dependencies d LEFT JOIN tasks t ON t.id=d.depends_on_id WHERE d.task_id=?",
+            "evidence": "SELECT kind,value,label,verified,created_at FROM evidence WHERE task_id=? ORDER BY created_at DESC",
+            "events": "SELECT event_type,producer,summary,payload_json,occurred_at FROM events WHERE task_id=? AND event_type!='codex.event_skipped' ORDER BY id DESC LIMIT 100",
+            "runs": "SELECT * FROM runs WHERE task_id=? ORDER BY attempt DESC",
+        }
+        for key, query in queries.items():
+            task[key] = [dict(row) for row in connection.execute(query, (task_id,))]
+        snapshot = self.operations_clarity.snapshot_from(connection)
+        version = _version_for(native, snapshot)
+        task["revision"] = version["revision"] if version else None
+        task["completion_basis"] = completion_basis(native, snapshot, self._required_evidence_for_task(native))
         return task
+
+    def completion_eligibility(self, task_id: str, connection=None) -> Dict[str, Any]:
+        if connection is None:
+            with self.db._read_connection() as owned:
+                return self.completion_eligibility(task_id, connection=owned)
+        with transaction_scope(connection):
+            snapshot = self.operations_clarity.snapshot_from(connection)
+            task = next((t for t in snapshot["tasks"] if t["id"] == task_id), None)
+            if task is None:
+                raise KeyError("task not found")
+            return completion_basis(task, snapshot, self._required_evidence_for_task(task))
+
+    def _complete_task(self, task_id, producer, summary, dedupe_key, progress, force):
+        with self.db.connect() as connection, transaction_scope(connection, write=True):
+            native = connection.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+            if native is None:
+                raise KeyError("task not found")
+            task = dict(native)
+            if task["state"] == "DONE":
+                return self._task_detail(connection, task)
+            if not force and "DONE" not in ALLOWED_TRANSITIONS.get(task["state"], set()):
+                raise OperationsError("invalid DONE transition", "stale", 409)
+            snapshot = self.operations_clarity.snapshot_from(connection)
+            version = self.operations_clarity._bookkeeping(snapshot, task)
+            gate = completion_basis(task, snapshot, self._required_evidence_for_task(task))
+            if not gate["eligible"]:
+                missing = gate.get("missing", [])
+                detail = "missing evidence: " + ", ".join(missing) if missing else "current action/dependency gate unresolved"
+                raise OperationsError("cannot complete; " + detail, "stale", 409)
+            now = datetime.now(timezone.utc).isoformat()
+            connection.execute("""UPDATE tasks SET state='DONE',progress=?,updated_at=?,finished_at=? WHERE id=?""",
+                               (100 if progress is None else progress, now, now, task_id))
+            event_key = (dedupe_key + ":" if dedupe_key else "completion:") + task_id + ":" + str(version["revision"])
+            inserted = self.db.add_event(task_id, "task.state_changed", producer,
+                                         redact_text(summary or "任务证据门禁已满足", max_chars=300), event_key,
+                                         {"state": "DONE", "completion_basis": gate}, occurred_at=now, connection=connection)
+            if not inserted:
+                raise OperationsError("completion audit event was not recorded", "stale", 409)
+            current = dict(connection.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone())
+            return self._task_detail(connection, current)
 
     def list_tasks(
         self, states: Optional[Sequence[str]] = None, limit: int = 500
@@ -517,16 +661,14 @@ class ControlPlane:
         progress: Optional[int] = None,
         force: bool = False,
     ) -> Dict[str, Any]:
+        if new_state == "DONE":
+            return self._complete_task(task_id, producer, summary, dedupe_key, progress, force)
         task = self.get_task(task_id)
         old_state = task["state"]
         if new_state == old_state:
             return task
         if not force and new_state not in ALLOWED_TRANSITIONS.get(old_state, set()):
             raise ValueError("invalid transition {} -> {}".format(old_state, new_state))
-        if new_state == "DONE":
-            missing = self.missing_completion_evidence(task_id)
-            if missing and not force:
-                raise ValueError("cannot complete; missing evidence: {}".format(", ".join(missing)))
         now = utc_now()
         values: List[Any] = [
             new_state,
@@ -631,6 +773,17 @@ class ControlPlane:
             "run_id": run.get("id") if run else "",
             "run_status": str(run.get("status") or "") if run else "",
         }
+        if is_paused_by_user(task) or stored_state in {"PAUSED", "PLAN_ONLY", "DONE", "CANCELED", "FAILED"}:
+            # Observe a conflicting worker without changing the protected state.
+            # Keep source='task' and syncing=False so reconciliation cannot use
+            # this observation to restore execution mode or clear native facts.
+            if run and str(run.get("status") or "").upper() in {"QUEUED", "RUNNING"}:
+                alive = self._process_alive(run.get("pid"))
+                result["process_alive"] = alive
+                result["live_run"] = alive
+                if alive:
+                    result["reason"] = "live worker observed; protected stored state retained"
+            return result
         if run and str(run.get("status") or "").upper() in {"QUEUED", "RUNNING"}:
             process_alive = self._process_alive(run.get("pid"))
             result["process_alive"] = process_alive
@@ -695,15 +848,15 @@ class ControlPlane:
                 task.get("action_owner_kind") or "none"
             ).lower() in {"user", "external"}:
                 return result
-            missing = self.missing_completion_evidence(task["id"])
-            resolved = "VERIFYING" if missing else "DONE"
+            gate = self.completion_eligibility(task["id"])
+            resolved = "DONE" if gate["eligible"] else "VERIFYING"
             result.update(
                 {
                     "state": resolved,
                     "source": "completed_run",
                     "reason": (
                         "run finished; completion evidence is pending"
-                        if missing
+                        if not gate["eligible"]
                         else "run finished and completion evidence is satisfied"
                     ),
                     "syncing": stored_state != resolved,
@@ -885,15 +1038,13 @@ class ControlPlane:
             "SELECT id FROM tasks WHERE state='VERIFYING' ORDER BY updated_at ASC"
         )
         for task in verifying:
-            if self.missing_completion_evidence(task["id"]):
+            if not self.completion_eligibility(task["id"])["eligible"]:
                 continue
-            self.transition(
-                task["id"],
-                "DONE",
-                producer="reconciler",
-                summary="证据门禁已满足，自动完成",
-                dedupe_key="completion-gate:{}".format(task["id"]),
-            )
+            try:
+                self.transition(task["id"], "DONE", producer="reconciler", summary="证据门禁已满足，自动完成",
+                                dedupe_key="completion-gate:{}".format(task["id"]))
+            except OperationsError:
+                continue
             completed += 1
 
         evidence_waiters = self.db.all(
@@ -905,16 +1056,13 @@ class ControlPlane:
             """
         )
         for task in evidence_waiters:
-            if self.missing_completion_evidence(task["id"]):
+            if not self.completion_eligibility(task["id"])["eligible"]:
                 continue
-            self.transition(
-                task["id"],
-                "DONE",
-                producer="reconciler",
-                summary="专属证据采集已闭环，自动完成",
-                dedupe_key="evidence-collection-complete:{}".format(task["id"]),
-                force=True,
-            )
+            try:
+                self.transition(task["id"], "DONE", producer="reconciler", summary="专属证据采集已闭环，自动完成",
+                                dedupe_key="evidence-collection-complete:{}".format(task["id"]), force=True)
+            except OperationsError:
+                continue
             evidence_completed += 1
 
         dependency_waiters = self.db.all(
@@ -1138,16 +1286,22 @@ class ControlPlane:
         worker_type: str,
         scope_summary: str,
         source: str,
+        model: Optional[str] = None,
+        reasoning: Optional[str] = None,
     ) -> None:
+        if model is not None or reasoning is not None:
+            require_execution_model(model, reasoning)
         self.db.execute(
             """
             INSERT INTO sessions(
                 id, code, name, worker_type, scope_summary, status,
                 model, reasoning, last_seen_at, source
-            ) VALUES(?, ?, ?, ?, ?, 'IDLE', 'gpt-5.6-sol', 'high', ?, ?)
+            ) VALUES(?, ?, ?, ?, ?, 'IDLE', ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
                 code=excluded.code, name=excluded.name, worker_type=excluded.worker_type,
                 scope_summary=excluded.scope_summary, last_seen_at=excluded.last_seen_at,
+                model=CASE WHEN excluded.model!='' THEN excluded.model ELSE sessions.model END,
+                reasoning=CASE WHEN excluded.model!='' THEN excluded.reasoning ELSE sessions.reasoning END,
                 source=excluded.source
             """,
             (
@@ -1156,6 +1310,8 @@ class ControlPlane:
                 redact_text(name, max_chars=160),
                 worker_type,
                 redact_text(scope_summary, max_chars=500),
+                model or "",
+                reasoning or "",
                 utc_now(),
                 source,
             ),
@@ -1166,6 +1322,9 @@ class ControlPlane:
         task_id: str,
         producer: str = "external-manager",
         execution_mode: str = "external",
+        model: Optional[str] = None,
+        reasoning: Optional[str] = None,
+        speed: Optional[str] = None,
     ) -> Dict[str, Any]:
         task = self.get_task(task_id)
         clean_mode = str(execution_mode or "external").lower()
@@ -1173,6 +1332,14 @@ class ControlPlane:
             raise ValueError("heartbeat mode must be external or delegated")
         if task["state"] in {"DONE", "CANCELED"}:
             raise ValueError("terminal task cannot register an execution heartbeat")
+        if model is not None or reasoning is not None:
+            require_execution_model(model, reasoning)
+            if is_paused_by_user(task):
+                raise ValueError("user-paused task cannot register a new execution model")
+        if speed is not None and (not isinstance(speed, str) or speed not in EXECUTION_SPEEDS):
+            raise ValueError("MODEL_POLICY: speed must be standard or fast")
+        if speed is not None and (model is None or reasoning is None):
+            raise ValueError("MODEL_POLICY: speed registration requires explicit model and reasoning")
         active_run = self.db.one(
             "SELECT * FROM runs WHERE task_id=? AND status IN ('QUEUED','RUNNING') "
             "ORDER BY attempt DESC LIMIT 1",
@@ -1182,6 +1349,19 @@ class ControlPlane:
             active_run and self._process_alive(active_run.get("pid"))
         )
         now = utc_now()
+        if model is not None:
+            self.db.execute(
+                "UPDATE tasks SET model=?, reasoning=?,speed=? WHERE id=?",
+                (model, reasoning, task["speed"] if speed is None else speed, task_id),
+            )
+            self.db.add_event(
+                task_id, "task.execution_model_registered", producer,
+                "已登记本次外部执行配置；历史 Run 保持原记录",
+                "execution-model:{}:{}:{}:{}".format(task_id, model, reasoning, now),
+                {"previous_model": task["model"], "previous_reasoning": task["reasoning"],
+                 "model": model, "reasoning": reasoning, "speed": speed,
+                 "source": "external-owner", "assurance": "declared_execution_parameters_not_independent_host_verification"},
+            )
         self.db.execute(
             """
             UPDATE tasks SET execution_mode=?, heartbeat_at=?,
@@ -1230,18 +1410,17 @@ class ControlPlane:
     def reroute(self, task_id: str) -> Dict[str, Any]:
         task = self.get_task(task_id)
         route = route_task(task["title"], task["scope_summary"], task["repository"])
-        policy = runtime_policy(route.reasoning)
+        # Routing ownership is not authorization to replace explicit execution
+        # choices or a historical run's pinned parameters.
+        if self.db.one("SELECT id FROM runs WHERE task_id=? AND status IN ('QUEUED','RUNNING')", (task_id,)):
+            raise ValueError("MODEL_PINNING: cannot reroute an active managed execution")
         self.db.execute(
             """
-            UPDATE tasks SET worker_type=?, owner_session=?, model=?, reasoning=?,
-                speed=?, updated_at=? WHERE id=?
+            UPDATE tasks SET worker_type=?, owner_session=?, updated_at=? WHERE id=?
             """,
             (
                 route.worker_type,
                 route.owner_session,
-                policy.model,
-                policy.reasoning,
-                policy.speed,
                 utc_now(),
                 task_id,
             ),
@@ -1312,7 +1491,23 @@ class ControlPlane:
     def dashboard_payload(
         self, now: Optional[datetime] = None
     ) -> Dict[str, Any]:
-        tasks = self.list_tasks(limit=1000)
+        with self.db.read_snapshot():
+            return self._dashboard_payload(now)
+
+    def _dashboard_payload(
+        self, now: Optional[datetime] = None
+    ) -> Dict[str, Any]:
+        configured_policy = load_policy()
+        policy = runtime_policy(now=now, policy=configured_policy)
+        operations_snapshot = self.operations_clarity.snapshot()
+        tasks = operations_snapshot["tasks"]
+        for task in tasks:
+            version = _version_for(task, operations_snapshot)
+            task["revision"] = version["revision"] if version else None
+            task["completion_basis"] = completion_basis(task, operations_snapshot, operations_snapshot["required_by_task"][task["id"]])
+        analysis_intakes = {
+            row["id"] for row in self.db.all("SELECT id FROM intakes WHERE intent='analyze'")
+        }
         latest_runs = {
             row["task_id"]: row
             for row in self.db.all(
@@ -1329,6 +1524,7 @@ class ControlPlane:
         }
         columns: Dict[str, List[Dict[str, Any]]] = {state: [] for state in BOARD_STATES}
         for task in tasks:
+            task["action_version"] = human_action_version(task)
             resolution = self.derive_task_state(task, latest_runs.get(task["id"]), now)
             task["stored_state"] = task["state"]
             task["state_resolution"] = resolution
@@ -1879,6 +2075,7 @@ class ControlPlane:
         return {
             "generated_at": utc_now(),
             "version": cursor,
+            "manager_entry": self.manager_entry_status(),
             "action_summary": action_summary,
             "waiting_summary": waiting_summary,
             "waiting_labels": WAITING_CATEGORY_LABELS,
@@ -1896,8 +2093,13 @@ class ControlPlane:
                 "SELECT * FROM runs ORDER BY created_at DESC LIMIT 50"
             ),
             "policy": {
-                "model": "gpt-5.6-sol",
-                "minimum_reasoning": "high",
+                "model": policy.model,
+                "minimum_reasoning": "low",
+                "reasoning": policy.reasoning,
+                "allowed_models": sorted(EXECUTION_MODELS),
+                "model_floor": "gpt-5.6-sol",
+                "reasoning_policy": "per-task exact choice; host capability required",
+                "speed_policy": "independent; existing runs pinned",
                 "dev_gate": "相关测试 + 最小冒烟",
                 "sensitive_storage": "无完整 prompt / 无原始 JSONL",
             },
@@ -1908,26 +2110,37 @@ class ControlPlane:
         return int(row["cursor"]) if row else 0
 
     def realtime_payload(self, after: int = 0, limit: int = 100) -> Dict[str, Any]:
-        """Return a versioned dashboard snapshot plus compact change metadata.
+        """Return an atomic snapshot and a bounded, lossless page of changes.
 
-        SQLite's autoincrement event id is the source-of-truth cursor. Clients can
-        safely discard snapshots whose version is not newer than the last applied
-        version, while reconnecting clients use ``after`` to learn what changed.
+        ``version`` identifies the dashboard snapshot, not delivery progress.
+        Only ``cursor`` (the last returned event) is safe for SSE IDs/reconnects.
+        Backlog pages can share a snapshot version while advancing the cursor.
+        An out-of-range cursor explicitly resets delivery to the log beginning.
         """
         clean_after = max(0, int(after))
-        changes = self.db.all(
-            """
-            SELECT e.id, e.event_id, e.task_id, e.event_type, e.producer,
-                e.summary, e.occurred_at
-            FROM events e
-            WHERE e.id > ?
-            ORDER BY e.id ASC LIMIT ?
-            """,
-            (clean_after, max(1, min(500, int(limit)))),
-        )
-        dashboard = self.dashboard_payload()
+        page_size = max(1, min(500, int(limit)))
+        with self.db.read_snapshot():
+            version = self.event_cursor()
+            reset = clean_after > version
+            page_after = 0 if reset else clean_after
+            changes = self.db.all(
+                """
+                SELECT e.id, e.event_id, e.task_id, e.event_type, e.producer,
+                    e.summary, e.occurred_at
+                FROM events e
+                WHERE e.id > ?
+                ORDER BY e.id ASC LIMIT ?
+                """,
+                (page_after, page_size + 1),
+            )
+            has_more = len(changes) > page_size
+            changes = changes[:page_size]
+            dashboard = self.dashboard_payload()
         return {
-            "version": int(dashboard["version"]),
+            "version": version,
+            "cursor": int(changes[-1]["id"]) if changes else page_after,
+            "has_more": has_more,
+            "reset": reset,
             "changes": changes,
             "dashboard": dashboard,
         }

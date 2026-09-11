@@ -12,7 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from socketserver import TCPServer
 from typing import Any, Dict, Optional
-from urllib.parse import parse_qs, quote, urlparse
+from urllib.parse import parse_qs, quote, unquote, urlparse
 
 from .config import DEFAULT_PORT, default_data_dir, default_workspace, ensure_data_dirs
 from .coordinator import RecoveryCoordinator
@@ -24,11 +24,15 @@ from .intake import (
     IntakeService,
 )
 from .reporting import daily_report_payload
+from .releases import ASSURANCE, ReleaseError
 from .runner import RunManager
 from .runtime import InstanceLock, publish_server_pid, remove_server_pid
 from .runtime_mode import ENGINE_MODES, background_cycle, validate_mode
 from .multipart import MAX_MULTIPART_BYTES, MultipartError, MultipartForm, parse_multipart, read_body
-from .service import ControlPlane
+from .service import ActionConflict, ControlPlane
+from .operations import enrich_operations
+from .operations_clarity import OperationsError
+from .admission import AdmissionError, AdmissionService
 
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -62,9 +66,30 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
         super().setup()
         self.connection.settimeout(15)
 
+    @property
+    def admissions(self):
+        return AdmissionService(self.service.db)
+
+    def _dispatch_admitted(self, task_id, instruction, resume):
+        prompt = self.manager.paths["prompts"] / "dispatch-{}-{}.txt".format(task_id, os.urandom(5).hex())
+        try:
+            prompt.write_text(instruction, encoding="utf-8")
+            os.chmod(prompt, 0o600)
+            return self.manager.dispatch(task_id, prompt, resume=resume)
+        finally:
+            prompt.unlink(missing_ok=True)
+
     def log_message(self, fmt: str, *args: Any) -> None:
         # Avoid persisting request paths or user input in access logs.
         return
+
+    def handle(self) -> None:
+        try:
+            super().handle()
+        except (ConnectionResetError, BrokenPipeError):
+            # A disconnected browser may reset even before request parsing or
+            # after an SSE handler returns. This is normal connection teardown.
+            self.close_connection = True
 
     def _json(self, status: int, payload: Dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -113,9 +138,10 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
 
     def _stream_events(self, parsed: Any) -> None:
         query = parse_qs(parsed.query)
-        raw_cursor = query.get(
-            "lastEventId", [self.headers.get("Last-Event-ID", "0")]
-        )[0]
+        # EventSource reconnects with the original URL and a newer header.
+        raw_cursor = self.headers.get("Last-Event-ID")
+        if raw_cursor is None:
+            raw_cursor = query.get("lastEventId", ["0"])[0]
         try:
             cursor = max(0, int(raw_cursor or 0))
         except (TypeError, ValueError):
@@ -136,30 +162,31 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
 
         try:
             self.wfile.write(b"retry: 3000\n\n")
-            requested_cursor = cursor
             initial = self.service.realtime_payload(after=cursor)
             if self.coordinator is not None:
                 initial.setdefault("dashboard", {})["qingtian_v2"] = (
                     self.coordinator.status()
                 )
-            cursor = int(initial["version"])
-            initial["reset"] = cursor < requested_cursor
+            cursor = int(initial["cursor"])
             self._write_sse("snapshot", cursor, initial)
+            has_more = bool(initial["has_more"])
             last_heartbeat = time.monotonic()
             while True:
-                time.sleep(0.75)
+                if not has_more:
+                    time.sleep(0.75)
                 latest = self.service.event_cursor()
-                if latest > cursor:
+                if has_more or latest != cursor:
                     payload = self.service.realtime_payload(after=cursor)
                     if self.coordinator is not None:
                         payload.setdefault("dashboard", {})["qingtian_v2"] = (
                             self.coordinator.status()
                         )
-                    cursor = int(payload["version"])
+                    cursor = int(payload["cursor"])
+                    has_more = bool(payload["has_more"])
                     self._write_sse("dashboard", cursor, payload)
                     last_heartbeat = time.monotonic()
                 elif time.monotonic() - last_heartbeat >= 15:
-                    self._write_sse("heartbeat", cursor, {"version": cursor})
+                    self._write_sse("heartbeat", cursor, {"version": latest, "cursor": cursor})
                     last_heartbeat = time.monotonic()
         except Exception:
             # Client disconnects and test teardown can race the next SQLite poll;
@@ -189,6 +216,8 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
             raise IntakeError(str(exc), status=getattr(exc, "status", 400)) from exc
 
     def _same_origin(self) -> bool:
+        if hasattr(self.headers, "get_all") and len(self.headers.get_all("Origin", [])) > 1:
+            return False
         origin = self.headers.get("Origin")
         if not origin:
             return True
@@ -197,6 +226,8 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
 
     def _valid_host(self) -> bool:
         """Reject DNS-rebinding hostnames even when Origin agrees with Host."""
+        if hasattr(self.headers, "get_all") and len(self.headers.get_all("Host", [])) != 1:
+            return False
         raw_host = self.headers.get("Host", "")
         try:
             parsed = urlparse("http://" + raw_host)
@@ -258,7 +289,76 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _operations_request(self, method: str) -> bool:
+        parsed = urlparse(self.path)
+        parts = parsed.path.split("/")
+        ordinary_report = False
+        if not ordinary_report and parsed.path != "/api/operations-clarity" and not parsed.path.startswith("/api/operations-clarity/"):
+            return False
+        try:
+            if len(self.headers.get_all("Host", [])) != 1 or not self._valid_host():
+                raise OperationsError("loopback Host and matching port required", "forbidden", 403)
+            if method == "POST" and (len(self.headers.get_all("Origin", [])) > 1 or not self._same_origin()):
+                raise OperationsError("cross-origin mutation rejected", "forbidden", 403)
+            if parsed.query or parsed.fragment:
+                raise OperationsError("operations filters are not supported")
+            parts = parsed.path.split("/")
+            if method == "GET":
+                if parsed.path == "/api/operations-clarity":
+                    result = self.service.operations_clarity.list_tasks()
+                    for task in result["tasks"]:
+                        task["admission"] = self.admissions.get(task["id"])
+                elif len(parts) == 5 and parts[3] == "tasks":
+                    result = self.service.operations_clarity.get_task(unquote(parts[4]))
+                    result["admission"] = self.admissions.get(result["id"])
+                else:
+                    raise OperationsError("operations endpoint not found", "missing", 404)
+                self._json(HTTPStatus.OK, result)
+                return True
+            if not ordinary_report and not (len(parts) in {6, 7} and parts[3] == "tasks" and parts[5] == "corrections" and
+                    (len(parts) == 6 or parts[6] == "preview")):
+                raise OperationsError("operations endpoint not found", "missing", 404)
+            try:
+                lengths = self.headers.get_all("Content-Length", [])
+                if len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit():
+                    raise ValueError("one content length required")
+                length = int(lengths[0])
+                if length > 64 * 1024 or self.headers.get_all("Transfer-Encoding", []):
+                    raise ValueError("bounded unchunked body required")
+                raw = self.rfile.read(length)
+                if len(raw) != length:
+                    raise ValueError("incomplete body")
+                def unique_object(pairs):
+                    result = {}
+                    for key, value in pairs:
+                        if key in result:
+                            raise ValueError("duplicate JSON key")
+                        result[key] = value
+                    return result
+                payload = json.loads(raw, object_pairs_hook=unique_object,
+                                     parse_constant=lambda value: (_ for _ in ()).throw(ValueError("nonfinite JSON")))
+            except (ValueError, UnicodeError, RecursionError) as exc:
+                self.close_connection = True
+                raise OperationsError("invalid operations JSON body; maximum 64 KiB") from exc
+            service = self.service.operations_clarity
+            if ordinary_report:
+                if not isinstance(payload, dict) or set(payload) != {"expected_revision", "idempotency_key"}:
+                    raise OperationsError("请刷新并核对当前任务，再提交 expected_revision 和 idempotency_key；不接受其他字段")
+                result = self.service.complete_human_action(unquote(parts[3]), **payload)
+                self._json(HTTPStatus.OK, result)
+                return True
+            preview = len(parts) == 7
+            result = (service.preview_correction if preview else service.apply_correction)(unquote(parts[4]), payload)
+            self._json(HTTPStatus.OK if preview or result["reused"] else HTTPStatus.CREATED, result)
+        except OperationsError as exc:
+            if method == "POST":
+                self.close_connection = True
+            self._json(exc.status, exc.payload())
+        return True
+
     def do_GET(self) -> None:
+        if self._operations_request("GET"):
+            return
         if not self._valid_host():
             self._json(HTTPStatus.FORBIDDEN, {"error": "loopback Host and matching port required"})
             return
@@ -298,6 +398,7 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
                     "data_dir": str(self.manager.data_dir),
                     "workspace": self.workspace,
                     "watchdog": watchdog,
+                    "manager_entry": self.service.manager_entry_status(),
                 },
             )
         elif parsed.path == "/api/dashboard":
@@ -305,6 +406,25 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
             if self.coordinator is not None:
                 payload["qingtian_v2"] = self.coordinator.status()
             self._json(HTTPStatus.OK, payload)
+        elif parsed.path == "/api/release-batches" or parsed.path.startswith("/api/release-batches/"):
+            try:
+                if parsed.path == "/api/release-batches":
+                    query = parse_qs(parsed.query, keep_blank_values=True)
+                    if any(key not in {"environment", "task_id"} or len(values) != 1
+                           for key, values in query.items()):
+                        raise ReleaseError("invalid release filters")
+                    result = self.service.releases.list_batches(
+                        environment=query.get("environment", [None])[0],
+                        task_id=query.get("task_id", [None])[0],
+                    )
+                else:
+                    parts = parsed.path.strip("/").split("/")
+                    if len(parts) != 3:
+                        raise ReleaseError("release endpoint not found", "missing", 404)
+                    result = self.service.releases.get_batch(parts[2])
+                self._json(HTTPStatus.OK, result)
+            except ReleaseError as exc:
+                self._json(exc.status, exc.payload())
         elif parsed.path == "/api/v2/orchestrator":
             if self.coordinator is None:
                 self._json(HTTPStatus.NOT_FOUND, {"enabled": False})
@@ -334,10 +454,20 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
                 self._json(HTTPStatus.NOT_FOUND, {"error": "intake not found"})
             except IntakeError as exc:
                 self._json(exc.status, {"error": str(exc)})
+        elif parsed.path.startswith("/api/tasks/") and parsed.path.endswith("/admission"):
+            parts = parsed.path.strip("/").split("/")
+            try:
+                if len(parts) != 4:
+                    raise AdmissionError("admission endpoint not found", "missing", 404)
+                self._json(HTTPStatus.OK, self.admissions.get(unquote(parts[2])))
+            except AdmissionError as exc:
+                self._json(exc.status, exc.payload())
         elif parsed.path.startswith("/api/tasks/"):
             task_id = parsed.path.split("/")[-1]
             try:
-                self._json(HTTPStatus.OK, self.service.get_task(task_id))
+                task = self.service.get_task(task_id)
+                task["admission"] = self.admissions.get(task_id)
+                self._json(HTTPStatus.OK, task)
             except KeyError:
                 self._json(HTTPStatus.NOT_FOUND, {"error": "task not found"})
         else:
@@ -355,6 +485,8 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
                 "synthetic": True,
             })
             return
+        if self._operations_request("POST"):
+            return
         if not self._valid_host():
             self._json(HTTPStatus.FORBIDDEN, {"error": "loopback Host and matching port required"})
             return
@@ -363,6 +495,32 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
             return
         parsed = urlparse(self.path)
         try:
+            if parsed.path == "/api/release-batches" or parsed.path.startswith("/api/release-batches/"):
+                try:
+                    # Preserve the existing 64 KiB JSON reader. Reject oversized
+                    # frames before reading so a valid truncated prefix cannot write.
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if length < 0 or length > 64 * 1024 or self.headers.get("Transfer-Encoding"):
+                        self.close_connection = True
+                        raise ReleaseError("release JSON body must be at most 64 KiB")
+                    payload = self._read_json()
+                except (ValueError, UnicodeError, RecursionError) as exc:
+                    self.close_connection = True
+                    raise ReleaseError("invalid release JSON body") from exc
+                if parsed.path == "/api/release-batches/preview":
+                    result = self.service.releases.preview(payload)
+                    status = HTTPStatus.OK
+                elif parsed.path == "/api/release-batches":
+                    result = self.service.releases.create(payload)
+                    status = HTTPStatus.OK if result["reused"] else HTTPStatus.CREATED
+                else:
+                    parts = parsed.path.strip("/").split("/")
+                    if len(parts) != 4 or parts[3] != "receipts":
+                        raise ReleaseError("release endpoint not found", "missing", 404)
+                    result = self.service.releases.append_receipts(parts[2], payload)
+                    status = HTTPStatus.OK
+                self._json(status, result)
+                return
             if parsed.path == "/api/intakes":
                 fields, uploads, _form = self._read_multipart()
                 try:
@@ -401,7 +559,33 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
                 )
                 self._json(HTTPStatus.OK, result)
                 return
-            payload = self._read_json()
+            if parsed.path.startswith("/api/tasks/") and parsed.path.endswith("/dispatch"):
+                if len(self.headers.get_all("Host", [])) != 1 or len(self.headers.get_all("Origin", [])) > 1:
+                    raise AdmissionError("one Host and at most one Origin required", "forbidden", 403)
+                lengths = self.headers.get_all("Content-Length", [])
+                if len(lengths) != 1 or not lengths[0].isascii() or not lengths[0].isdigit() or int(lengths[0]) > 64 * 1024 or self.headers.get_all("Transfer-Encoding", []):
+                    self.close_connection = True
+                    raise AdmissionError("one bounded unchunked body required")
+                length = int(lengths[0])
+                raw = self.rfile.read(length)
+                if len(raw) != length:
+                    self.close_connection = True
+                    raise AdmissionError("incomplete dispatch body")
+                def unique_admission_object(pairs):
+                    result = {}
+                    for key, value in pairs:
+                        if key in result:
+                            raise AdmissionError("duplicate dispatch JSON key")
+                        result[key] = value
+                    return result
+                try:
+                    payload = json.loads(raw, object_pairs_hook=unique_admission_object,
+                                         parse_constant=lambda value: (_ for _ in ()).throw(AdmissionError("nonfinite dispatch JSON")))
+                except (UnicodeError, ValueError, RecursionError) as exc:
+                    self.close_connection = True
+                    raise AdmissionError("invalid dispatch JSON") from exc
+            else:
+                payload = self._read_json()
             if parsed.path == "/api/tasks":
                 instruction = str(payload.pop("instruction", ""))
                 auto_start = payload.pop("auto_start", False)
@@ -418,6 +602,10 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
                     repository=str(payload.get("repository", "")),
                     base_branch=str(payload.get("base_branch", "")),
                     worker_type=str(payload.get("worker_type", "auto")),
+                    model=payload.get("model"),
+                    reasoning=payload.get("reasoning", "auto"),
+                    owner_session=str(payload.get("owner_session", "")),
+                    speed=payload.get("speed"),
                     requires_deploy=requires_deploy,
                 )
                 if auto_start and instruction:
@@ -440,22 +628,8 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
                     raise ValueError("invalid task action")
                 task_id, action = parts[2], parts[3]
                 if action == "dispatch":
-                    instruction = payload.get("instruction", "")
-                    if not isinstance(instruction, str) or not instruction.strip():
-                        raise ValueError("dispatch requires a nonempty instruction")
-                    resume = payload.get("resume", False)
-                    if not isinstance(resume, bool):
-                        raise ValueError("resume must be a boolean")
-                    prompt = self.manager.paths["prompts"] / "dispatch-{}-{}.txt".format(
-                        task_id, os.urandom(5).hex()
-                    )
-                    prompt.write_text(instruction, encoding="utf-8")
-                    os.chmod(prompt, 0o600)
-                    try:
-                        run = self.manager.dispatch(task_id, prompt, resume=resume)
-                    finally:
-                        prompt.unlink(missing_ok=True)
-                    result = {"task": self.service.get_task(task_id), "run": run}
+                    result = self.admissions.dispatch(task_id, payload, self._dispatch_admitted,
+                        validate_execution=getattr(self.manager, "validate_execution_parameters", None))
                 elif action == "cancel":
                     result = self.manager.cancel(task_id)
                 elif action == "plan":
@@ -490,7 +664,14 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
                             pass
                     result = self.service.get_task(task_id)
                 elif action == "complete-human-action":
-                    result = self.service.complete_human_action(task_id)
+                    if set(payload) == {"expected_revision", "idempotency_key"}:
+                        result = self.service.report_human_action(task_id, **payload)
+                    elif set(payload) == {"expected_action_version"} and isinstance(payload["expected_action_version"], str) and payload["expected_action_version"]:
+                        result = self.service.complete_human_action(
+                            task_id, expected_action_version=payload.get("expected_action_version"),
+                        )
+                    else:
+                        raise OperationsError("请刷新当前任务，提交 expected_action_version 或 expected_revision + idempotency_key")
                 elif action == "remind-external":
                     result = self.service.remind_human_action(task_id)
                 elif action == "heartbeat":
@@ -498,12 +679,23 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
                         task_id,
                         producer="local-api",
                         execution_mode=str(payload.get("mode", "external")),
+                        model=payload.get("model"),
+                        reasoning=payload.get("reasoning"),
+                        speed=payload.get("speed"),
                     )
                 else:
                     raise ValueError("unsupported action")
                 self._json(HTTPStatus.OK, result)
                 return
             self._json(HTTPStatus.NOT_FOUND, {"error": "not found"})
+        except ActionConflict as exc:
+            self._json(HTTPStatus.CONFLICT, {"error": str(exc)})
+        except OperationsError as exc:
+            self._json(exc.status, exc.payload())
+        except AdmissionError as exc:
+            self._json(exc.status, exc.payload())
+        except ReleaseError as exc:
+            self._json(exc.status, exc.payload())
         except IntakeError as exc:
             self._json(exc.status, {"error": str(exc)})
         except (ValueError, RuntimeError, KeyError, FileNotFoundError) as exc:
@@ -540,7 +732,7 @@ def serve(
         # that died before it could run normal shutdown cleanup.
         remove_server_pid(paths["run"])
         db = Database(paths["db"])
-        service = ControlPlane(db)
+        service = ControlPlane(db, manager_entry_workspace=workspace)
         manager = RunManager(service, data_dir)
         qingtian_v2_enabled = not synthetic_tour and os.environ.get("QINGTIAN_RECOVERY_ENABLED", "1").lower() not in {
             "0", "false", "off", "no"

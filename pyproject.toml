@@ -1,6 +1,6 @@
 [project]
 name = "qingtian-ai"
-version = "0.5.0"
+version = "0.6.0rc2"
 description = "Real local AI task engine: Codex workers, worktrees, receipts, recovery and project knowledge"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -34,8 +34,8 @@ Security = "https://github.com/ai-partner-lab/qingtianAI/security/policy"
 
 [project.optional-dependencies]
 browser = ["playwright>=1.55,<2"]
-pdf = ["pypdf>=6,<7"]
-dev = ["build>=1.2,<2"]
+pdf = ["pypdf>=6.18.0,<7"]
+dev = ["build>=1.2,<2", "setuptools>=78.1.1"]
 
 [project.scripts]
 qingtian = "qingtian_engine.entrypoint:main"
@@ -43,8 +43,9 @@ qingtian-lab = "qingtian_core.cli:main"
 qingtian-kb = "qingtian_kb.cli:main"
 
 [build-system]
-requires = ["setuptools>=77.0.3"]
-build-backend = "setuptools.build_meta"
+requires = ["setuptools>=78.1.1"]
+build-backend = "build_sdist"
+backend-path = ["scripts"]
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import threading
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional
@@ -47,6 +48,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     action_text TEXT NOT NULL DEFAULT '',
     action_due TEXT,
     action_sensitive INTEGER NOT NULL DEFAULT 0,
+    action_revision INTEGER NOT NULL DEFAULT 0 CHECK(action_revision >= 0 AND typeof(action_revision) = 'integer'),
     execution_mode TEXT NOT NULL DEFAULT 'managed',
     heartbeat_at TEXT,
     evidence_profile TEXT NOT NULL DEFAULT 'auto',
@@ -105,6 +107,9 @@ CREATE TABLE IF NOT EXISTS runs (
     attempt INTEGER NOT NULL,
     adapter TEXT NOT NULL,
     command_summary TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    reasoning TEXT NOT NULL DEFAULT '',
+    speed TEXT NOT NULL DEFAULT '',
     pid INTEGER,
     process_group INTEGER,
     session_id TEXT NOT NULL DEFAULT '',
@@ -286,6 +291,35 @@ class Database:
     def __init__(self, path: Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._reads = threading.local()
+
+    @contextmanager
+    def read_snapshot(self) -> Iterator[None]:
+        """Keep related reads on one SQLite snapshot, isolated per request thread.
+
+        Writes continue to use their own connections. Nested read scopes borrow
+        the outer snapshot without committing or closing it prematurely.
+        """
+        if getattr(self._reads, "connection", None) is not None:
+            yield
+            return
+        with self.connect() as connection:
+            connection.execute("PRAGMA query_only=ON")
+            connection.execute("BEGIN")
+            self._reads.connection = connection
+            try:
+                yield
+            finally:
+                del self._reads.connection
+
+    @contextmanager
+    def _read_connection(self) -> Iterator[sqlite3.Connection]:
+        connection = getattr(self._reads, "connection", None)
+        if connection is not None:
+            yield connection
+        else:
+            with self.connect() as connection:
+                yield connection
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -310,6 +344,9 @@ class Database:
                 for row in connection.execute("PRAGMA table_info(runs)").fetchall()
             }
             for name in (
+                "model",
+                "reasoning",
+                "speed",
                 "failure_kind",
                 "failure_stage",
                 "failure_type",
@@ -346,6 +383,7 @@ class Database:
                 "action_text": "TEXT NOT NULL DEFAULT ''",
                 "action_due": "TEXT",
                 "action_sensitive": "INTEGER NOT NULL DEFAULT 0",
+                "action_revision": "INTEGER NOT NULL DEFAULT 0 CHECK(action_revision >= 0 AND typeof(action_revision) = 'integer')",
             }
             for name, definition in action_columns.items():
                 if name not in task_columns:
@@ -376,7 +414,30 @@ class Database:
             connection.execute(
                 "INSERT OR IGNORE INTO meta(key, value) VALUES('schema_version', '1')"
             )
-            connection.execute("UPDATE meta SET value='8' WHERE key='schema_version'")
+            # A revision covers every task-row write, including same-value
+            # action reissues, terminal clears, and older SQL/import paths.
+            # Do not infer historical counts: migrated rows start at zero.
+            # The inner revision UPDATE cannot recurse because it increases
+            # the value; this also works with recursive_triggers enabled.
+            connection.execute(
+                """CREATE TRIGGER IF NOT EXISTS tasks_action_revision
+                   AFTER UPDATE ON tasks
+                   WHEN NEW.action_revision <= OLD.action_revision
+                   BEGIN
+                       UPDATE tasks SET action_revision=OLD.action_revision + 1
+                       WHERE id=NEW.id;
+                   END"""
+            )
+            connection.execute("UPDATE meta SET value='11' WHERE key='schema_version'")
+            from .releases import initialize_release_schema
+
+            initialize_release_schema(connection)
+            from .operations_clarity import initialize_operations_schema
+
+            initialize_operations_schema(connection)
+            from .admission import initialize_admission_schema
+
+            initialize_admission_schema(connection)
         try:
             os.chmod(self.path, 0o600)
         except OSError:
@@ -388,12 +449,12 @@ class Database:
             return cursor.rowcount
 
     def one(self, sql: str, params: Iterable[Any] = ()) -> Optional[Dict[str, Any]]:
-        with self.connect() as connection:
+        with self._read_connection() as connection:
             row = connection.execute(sql, tuple(params)).fetchone()
             return dict(row) if row else None
 
     def all(self, sql: str, params: Iterable[Any] = ()) -> List[Dict[str, Any]]:
-        with self.connect() as connection:
+        with self._read_connection() as connection:
             rows = connection.execute(sql, tuple(params)).fetchall()
             return [dict(row) for row in rows]
 
@@ -406,8 +467,11 @@ class Database:
         dedupe_key: str,
         payload: Optional[Dict[str, Any]] = None,
         occurred_at: Optional[str] = None,
+        *,
+        connection: Optional[sqlite3.Connection] = None,
     ) -> bool:
-        with self.connect() as connection:
+        scope = self.connect() if connection is None else nullcontext(connection)
+        with scope as connection:
             cursor = connection.execute(
                 """
                 INSERT OR IGNORE INTO events(

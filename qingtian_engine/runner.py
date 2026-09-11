@@ -13,7 +13,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .config import ensure_data_dirs, runtime_policy
+from .config import ensure_data_dirs
+from .execution_parameters import (explicit_parameters, pinned_run_parameters,
+                                   require_same_parameters, require_same_execution_target, require_codex_capability,
+                                   execution_policy_prompt)
 from .db import Database, utc_now
 from .project_config import (
     ProjectConfigError,
@@ -60,6 +63,19 @@ class RunManager:
         # data root once so DB/prompt/evidence paths never drift into that worktree.
         self.data_dir = Path(data_dir).expanduser().resolve()
         self.paths = ensure_data_dirs(self.data_dir)
+
+    def validate_execution_parameters(self, task, resume=False):
+        """Read-only preflight; no receipt, task, run or process writes."""
+        if resume:
+            latest = self.db.one("SELECT * FROM runs WHERE task_id=? ORDER BY attempt DESC LIMIT 1", (task["id"],))
+            if not latest or not latest["session_id"]:
+                raise ValueError("MODEL_PINNING: cannot continue without a captured Codex session")
+            policy = pinned_run_parameters(self.db, latest)
+            require_same_parameters(task, policy)
+            require_same_execution_target(self.db, task, latest)
+        else:
+            policy = explicit_parameters(task)
+        return require_codex_capability(policy)
 
     def dispatch(
         self,
@@ -125,12 +141,10 @@ class RunManager:
 
         task = self._resolve_dispatch_repository(task, persist=not dry_run)
 
-        policy = runtime_policy(task["reasoning"])
+        latest = self.db.one("SELECT * FROM runs WHERE task_id=? ORDER BY attempt DESC LIMIT 1", (task_id,))
+        resume_source_id = latest["id"] if resume and latest else None
+        policy = self.validate_execution_parameters(task, resume)
         if dry_run:
-            latest = self.db.one(
-                "SELECT * FROM runs WHERE task_id=? ORDER BY attempt DESC LIMIT 1",
-                (task_id,),
-            )
             session_id = latest["session_id"] if resume and latest else ""
             if resume and not session_id:
                 raise RuntimeError("cannot continue: no captured Codex session id")
@@ -148,22 +162,19 @@ class RunManager:
                 "would_create_worktree": not bool(task.get("worktree")),
                 "active_run_id": active["id"] if active else None,
             }
-        self.db.execute(
-            "UPDATE tasks SET model=?, reasoning=?, speed=?, updated_at=? WHERE id=?",
-            (policy.model, policy.reasoning, policy.speed, utc_now(), task_id),
-        )
-        task = self.service.get_task(task_id)
-
         if task["repository"]:
             # Idempotently validate the persisted worktree boundary on every
             # real dispatch. This also repairs the old dry-run bug that could
             # persist an expected path before the directory was created.
             prepare_worktree(self.service, task_id, self.data_dir)
             task = self.service.get_task(task_id)
+        require_same_parameters(task, policy)
 
         latest = self.db.one(
             "SELECT * FROM runs WHERE task_id=? ORDER BY attempt DESC LIMIT 1", (task_id,)
         )
+        if resume and (not latest or latest["id"] != resume_source_id):
+            raise ValueError("MODEL_PINNING: resume source changed while preparing execution")
         attempt = int(latest["attempt"]) + 1 if latest else 1
         session_id = latest["session_id"] if resume and latest else ""
         if resume and not session_id:
@@ -184,12 +195,20 @@ class RunManager:
         )
         try:
             with self.db.connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                current = connection.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
+                require_same_parameters(dict(current), policy)
+                if resume:
+                    require_same_execution_target(self.db, dict(current), latest)
+                    current_latest = connection.execute("SELECT id FROM runs WHERE task_id=? ORDER BY attempt DESC LIMIT 1", (task_id,)).fetchone()
+                    if not current_latest or current_latest["id"] != resume_source_id:
+                        raise ValueError("MODEL_PINNING: resume source changed before enqueue")
                 connection.execute(
                     """
                     INSERT INTO runs(
                         id, task_id, attempt, adapter, command_summary, session_id,
-                        status, created_at, retry_of
-                    ) VALUES(?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?)
+                        status, created_at, retry_of, model, reasoning, speed
+                    ) VALUES(?, ?, ?, ?, ?, ?, 'QUEUED', ?, ?, ?, ?, ?)
                     """,
                     (
                         run_id,
@@ -200,6 +219,9 @@ class RunManager:
                         session_id,
                         utc_now(),
                         latest["id"] if latest else None,
+                        policy.model,
+                        policy.reasoning,
+                        policy.speed,
                     ),
                 )
         except sqlite3.IntegrityError:
@@ -834,12 +856,12 @@ class RunManager:
         prompt.write_text(
             "擎天已自动领取此任务。目标：{title}。\n"
             "范围：{scope}\n"
-            "严格保持任务现有模型与推理配置：gpt-5.6-sol，reasoning high 或更高；"
-            "夜间使用 standard。只处理本任务范围，不修改无关仓库。\n"
+            "{model_policy}只处理本任务范围，不修改无关仓库。\n"
             "dev 只运行与改动直接相关的测试和最小部署后冒烟，不运行全量门禁。"
             "不得伪造 commit/test/deploy/smoke 证据；遇到真实外部依赖、用户授权、"
             "生产 Key、回调或高风险动作，立即转为可审计等待。".format(
                 title=task["title"],
+                model_policy=execution_policy_prompt(explicit_parameters(task)),
                 scope=task.get("scope_summary") or task.get("short_summary") or "按任务标题执行",
             ),
             encoding="utf-8",

@@ -22,7 +22,7 @@ def main(argv=None) -> int:
     if args and args[0] in {"bundle", "bundle-verify", "scan"}:
         from qingtian_core.cli import main as tools_main
         return tools_main(args)
-    commands = {"quickstart", "tour", "selftest", "knowledge"}
+    commands = {"quickstart", "tour", "selftest", "knowledge", "manager-entry", "capabilities"}
     # Skip only known global options. A task title or prompt value must never
     # accidentally become a top-level command.
     cursor = 0
@@ -37,11 +37,19 @@ def main(argv=None) -> int:
                   "Guided synthetic tour on the same engine: qingtian tour --open\n"
                   "Credential-free engine checks: qingtian selftest\n"
                   "Connect your own Knowledge Hub: qingtian knowledge --help\n"
+                  "Read-only manager setup guide: qingtian manager-entry guide\n"
+                  "Manage the Codex manager entry: qingtian manager-entry inspect / init / sync / status\n"
                   "Source bundle: qingtian bundle / bundle-verify\n"
                   "Old 0.4 laboratory only: qingtian legacy ... / qingtian-lab ...\n")
             return engine_main(["--help"])
         return engine_main(args)
     command = args[index]
+    if command == "capabilities":
+        from .capability_setup import main as capability_main
+        return capability_main(args[:index] + args[index + 1:])
+    if command == "manager-entry":
+        from .manager_entry import main as manager_main
+        return manager_main(args[:index] + args[index + 1:])
     if command == "knowledge":
         from .knowledge_setup import main as knowledge_main
         return knowledge_main(args[:index] + args[index + 1:])
@@ -63,12 +71,22 @@ def main(argv=None) -> int:
         from .config import default_data_dir, default_workspace
         parser.add_argument("--data-dir", type=Path, default=default_data_dir())
         parser.add_argument("--workspace", type=Path, default=default_workspace())
+        parser.add_argument("--skip-manager-entry", action="store_true",
+                            help="Start only the dashboard; do not initialize a Codex manager thread")
+        parser.add_argument("--manager-entry", action="store_true",
+                            help="Explicitly initialize the native Codex manager thread (optional integration)")
         options = parser.parse_args(args[:index] + args[index + 1:])
         from .cli import build_service, start_server
         data = options.data_dir.expanduser().resolve()
         if not 1 <= options.port <= 65535:
             parser.error("port must be between 1 and 65535")
         build_service(data)
+        if options.manager_entry and options.skip_manager_entry:
+            parser.error("--manager-entry and --skip-manager-entry conflict")
+        if options.manager_entry:
+            from .manager_entry import initialize_from_environment
+            entry = initialize_from_environment(data, options.workspace)
+            print(json.dumps({"manager_entry": entry}, ensure_ascii=False), flush=True)
         return start_server(data, options.port, False, options.open,
                             mode="manual", workspace=options.workspace.expanduser().resolve())
     options = parser.parse_args(args[:index] + args[index + 1:])

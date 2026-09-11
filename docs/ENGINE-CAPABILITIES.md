@@ -8,18 +8,22 @@
 |---|---|---|
 | 请求收件箱 | 文本、多附件、理解回执、规划草案、任务分发结果 | 默认 Planner 使用规则与元数据，不声称看懂图片/文档语义。 |
 | 附件 | 最多 10 个，单个 25 MiB，总计 100 MiB；文件名、类型/魔数、SHA256、读取时完整性检查 | 支持 PNG/JPEG/WebP/GIF/PDF/DOCX/XLSX/TXT/MD；不是病毒扫描、OCR 或所有格式解析器。 |
-| 幂等请求 | intake 幂等键、任务幂等键、附件 hash 去重 | 直接 `POST /api/tasks` 不转发 Idempotency-Key；不得据此假设它可安全重放。 |
+| 幂等请求 | intake 幂等键、任务幂等键、附件 hash 去重；HTTP task dispatch 有 revision + idempotency admission receipt | admission 仅覆盖 `/api/tasks/{id}/dispatch`；直接创建、intake/retry/auto 与外部 host ack 未统一。 |
 | 任务图 | 父子任务、阻塞依赖、跨职责任务拆分、父任务汇总 | 规则拆分最多 5 个子任务，不是任意复杂项目的最佳规划保证。 |
 | 角色路由 | frontend/backend/qa 等通用角色、worker_type、priority、推理与环境策略 | 是路由元数据，不是多个人格的自治进程；不同角色目前共用 Codex 执行路径。 |
-| 实际执行 | Codex CLI、stdin 提示、JSONL 事件、PID/进程组、取消、已捕获 session 的 resume | 需安装/授权 Codex；模型可用性、网络、额度由接入环境决定。 |
+| 实际执行 | Codex CLI、stdin 提示、JSONL 事件、PID/进程组、取消、符合新准入的 session resume | 需显式安装/授权 Codex；模型可用性、网络、额度由接入环境决定。无凭据 start/doctor/selftest/tour/KB 不受影响。 |
+| 执行配置 | 仅 Sol/Astra、精确 `low..ultra`、独立 standard/fast；显式 > env > route/default；角色默认 manager Astra/ultra/fast、executor/planner Sol/high/standard | 不 clamp；新 run 冻结七字段目标。旧历史缺不可变快照则拒绝 resume，不猜或回填。 |
+| 本机能力准入 | 人工审查的私有 schema-2 manifest；只读 status 与显式非覆盖 prepare | 24 小时内且本机/CLI/catalog 精确匹配；本机 advertisement 不证明账户权限、额度或 served tier。 |
 | 项目隔离 | 显式注册项目名/角色/仓库、独立 worktree/分支、开发基线；空配置不猜目录 | 拒绝受保护基线、引擎源目录/数据目录/安装包目录；不是容器隔离，scope 不是独立权限围栏。 |
-| 状态事实 | task、run、event、evidence 分离；派生状态与等待分类 | 动画、退出码、模型自述都不能单独证明任务完成。 |
-| 证据门 | 按 profile 要求 verified commit/test/deploy/smoke/browser/artifact | 验证标记有操作方/补证信任边界，需结合原始产物和独立检查。 |
+| 状态事实 | task、run、event、evidence、admission、release 分离；等待显示 actor/next action/due/source | 动画、退出码、模型自述和 DONE 都不能单独证明任务完成或发布。 |
+| 证据门 | 按 profile 要求 verified commit/test/deploy/smoke/browser/artifact；完成与审计事务化 | `force` 不越过；验证标记仍有操作方/补证信任边界，需结合原始产物和独立检查。 |
 | 容错 JSONL | 非 JSON/非对象行隔离；安全事件元数据；不存原始模型回复 | 不是任意 CLI 流协议的通用解析器。 |
 | 恢复 | 状态核对、基础设施故障分类、补证欠账、有限重试、死信记录 | manual 不后台启动恢复；auto 才执行可调度恢复路径。 |
 | 协调 | 数据目录实例锁、持久 lease、fencing token、恢复检查点 | 本机 SQLite 协调，不是跨节点强一致任务平台。 |
-| 人工协作 | user/external/agent 等行动归属、人工完成确认、外部提醒记录 | “提醒”是在账本中记录动作，不等于邮件、Slack 等外部消息已发出。 |
-| 看板 | SSE 初始快照/增量版本/心跳、状态卡片、任务详情、运行/证据、等待类别 | 版本是数据库事件游标；页面不是所有工具的实时屏幕转播。 |
+| 人工协作 | user/external/agent 行动归属；schema 10 任务行 revision、版本比较与原子审计；普通完成声明进入 VERIFYING | 409 要重新 GET/确认；不授予敏感审批、预算、部署或完成证据。“提醒”只记账，不等于外部消息已发出。 |
+| 运维清晰度 | 原生等待事实 + 经审查来源的逐字段投影；append-only reason/next-action corrections | 更正是补充显示层，不覆盖 native；来源冲突、过期或基线变化时 fail closed/stale。 |
+| 发布事实 | append-only release batches/receipts，分别登记 deployment/enablement/acceptance 声明 | 仅记录已审查声明，不执行部署/开关/验收，不独立复验；DONE 不自动发布。 |
+| 看板 | SSE 原子快照、分页变化/消费游标、心跳、任务详情、运行/证据、等待类别 | 快照 version 不等于消费 cursor；可能重放，非恰好一次投递；页面不是所有工具的实时屏幕转播。 |
 | 报告与反馈 | 滚动 24 小时结构化报告/Markdown、消费者反馈游标 | 消费者接口不等于已接入外部聊天平台；游标读取模式需要正确选择。 |
 | 知识上下文 | 包内模块或外部可执行 Provider；approved 引用；独立只读进程、关联校验、大小/超时限制、错误事件 | 公开包不含私有 Vault/索引；需初始化自己的知识工作区；candidate 要显式查询，Worker 默认不取 history。 |
 | 手动/自动 | 默认 manual，显式 auto；创建任务不隐式等于执行 | manual 仍可写，也允许明确 dispatch 或 implement intake。 |
@@ -35,12 +39,15 @@
 | 状态与依赖 | `test_service.py`、`test_waiting_taxonomy.py` | 新建任务的状态变化、等待归属、依赖解除、证据不足不完成 | 旧任务截图是当前验收证据。 |
 | 运行生命周期 | `test_worktree_worker.py`、`test_runtime_lifecycle.py` | 新的隔离样例仓库、PID/进程组、取消、退出、重启所有权 | 单元 fake process 等于真实 Codex 已运行。 |
 | 并发/恢复 | `test_coordinator.py`、`test_engine_mode.py` | lease 竞争、重复请求、唯一活跃 run、manual 不自动重派、auto 的配额 | 外部副作用恰好一次或跨机一致性。 |
+| 动作版本/配置冻结 | `test_human_action_cas.py`、`test_model_policy.py`、`test_runtime_p2_regressions.py` | 同值/同秒重发与并发冲突、审计回滚、精确枚举/优先级、能力清单失败闭合、旧快照拒绝续接 | 旧版本历史已重建、provider 或原生角色已验收。 |
+| 准入/完成/运维/发布 | `test_evolution_admission.py`、`test_evolution_operations_clarity.py`、`test_evolution_release_batches.py`、`test_evolution_completion_transaction_race.py` | HTTP 派发 receipt、七字段冻结、force 不越门、来源化等待投影、追加发布声明 | 外部 host 接纳、真实发布或独立业务验收。 |
+| SSE 游标 | `test_realtime_cursor.py` | 真实临时 HTTP/SSE 的分页、并发写入、重连/reset 与快照/游标分离 | 历史录像的 13 条遗漏已被追溯补齐或无限审计流。 |
 | 知识 Provider | `test_knowledge.py`、`test_worker_knowledge.py` | stdin 合同、超时/响应上限、失败标记、引用边界、查询不进事件摘要 | 完整 ACL、DLP、知识正确性自动认证。 |
 | 规划/附件 | `test_intake.py` | 文件限制、格式检查、幂等、明确意图和受控引用 | deterministic 已理解图片内容。 |
 | 项目映射 | 项目注册表与 runner 的配置/集成测试 | allowlist、基线、scope 越界、引擎目录阻止、配置失败 | 项目功能或生产部署已通过。 |
 | 报告 | `test_reporting.py` | 24 小时窗口、暂停/仅规划分组、证据展示 | 报表上的 DONE 自动代表产品验收。 |
 | 真 CLI 端到端 | 上述接口可驱动；需新环境独立运行并保存回执 | 创建新任务，实际 Codex 修改一次性样例仓库，收集测试与证据，验证状态闭环 | 使用 fake process 或 Demo 推进代替真实 E2E。 |
-| 浏览器 E2E | 有 HTTP/SSE 和静态 UI 合约测试；浏览器自动化由验收环境运行 | 同屏反馈、刷新恢复、多标签页版本一致、键盘与移动视口 | 仅静态字符串断言就是浏览器 E2E。 |
+| 浏览器 E2E | `test_dashboard_journey.py --browser-e2e` 与独立 `current-engine-browser` CI job | 当前 Handler/service/SQLite 的真实隔离浏览器旅程、普通动作冲突、SSE 刷新/失败恢复与移动视口 | 静态/DOM 单测、旧 laboratory job 或 CI 配置存在等于本候选 browser 已通过；原生目的地未打开。 |
 | 视觉门禁 | **没有内建像素基线比较服务** | 接入方提供截图尺寸、字体、基线、阈值与人工复核记录 | 能力目录中的“视觉”已经自动执行。 |
 | 性能/安全 | 基础负例和本机运行限制 | 并发请求、恢复时间、资源上限、秘密回显、附件异常 | 生产渗透、容量/SLO、灾备演练已经完成。 |
 

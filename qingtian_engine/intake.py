@@ -15,7 +15,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO, Callable, Dict, Iterable, List, Optional, Sequence
 
-from .config import ensure_data_dirs, runtime_policy
+from .config import ensure_data_dirs, runtime_policy, EXECUTION_EFFORTS
+from .execution_parameters import codex_command_prefix
 from .db import utc_now
 from .project_config import ProjectConfigError, load_project_config
 from .redaction import contains_secret, fingerprint, redact_text
@@ -30,7 +31,7 @@ MAX_TEXT_CHARS = 20_000
 INTENTS = {"analyze", "implement", "implement_and_deploy_dev"}
 SAFE_ENVIRONMENTS = {"local", "dev", "test"}
 SAFE_WORKERS = {"cli", "browser", "qa", "infra", "security", "manager"}
-SAFE_REASONING = {"high", "xhigh", "max", "ultra"}
+SAFE_REASONING = EXECUTION_EFFORTS
 
 MIME_BY_SUFFIX = {
     ".png": "image/png",
@@ -243,7 +244,7 @@ class DeterministicPlannerAdapter:
             "repository": str(advanced.get("repository", "")),
             "worker_type": worker,
             "owner_session": route.owner_session,
-            "reasoning": route.reasoning,
+            "reasoning": advanced.get("reasoning", route.reasoning),
             "requires_deploy": requires_deploy,
             "route_reason": route.reason,
             "dependencies": [],
@@ -293,17 +294,15 @@ class CodexPlannerAdapter:
                 ensure_ascii=False,
             )
         )
+        # Planner's own model is separate from the execution choices requested
+        # for the resulting task. Each explicit planner selection is preserved.
+        policy = runtime_policy(advanced.get("planner_reasoning"),
+                                requested_model=advanced.get("planner_model"),
+                                requested_speed=advanced.get("planner_speed"), role="planner")
         command = [
-            "codex",
-            "exec",
+            *codex_command_prefix(policy, "exec"),
             "--json",
-            "--ephemeral",
-            "--sandbox",
-            "read-only",
-            "-m",
-            "gpt-5.6-sol",
-            "-c",
-            "model_reasoning_effort=xhigh",
+            "--ephemeral", "--sandbox", "read-only",
             "-",
         ]
         try:
@@ -411,7 +410,10 @@ class DeterministicIntakePolicy:
         requires_deploy = bool(final["requires_deploy"])
         if requires_deploy:
             environment = "dev"
-        policy = runtime_policy(route.reasoning)
+        policy = runtime_policy(advanced.get("reasoning", None if "QINGTIAN_REASONING" in os.environ else route.reasoning),
+                                requested_model=advanced.get("model", final.get("model")),
+                                requested_speed=advanced.get("speed", final.get("speed")),
+                                role="manager" if route.worker_type == "manager" else "executor")
         final.update(
             {
                 "environment": environment,
@@ -612,7 +614,8 @@ class IntakeService:
                 message["metadata"] = {}
         tasks = self.db.all(
             """
-            SELECT id, parent_id, title, state, owner_session, worker_type, progress
+            SELECT id, parent_id, title, state, owner_session, worker_type, progress,
+                model, reasoning, speed
             FROM tasks WHERE source_request_id=? ORDER BY created_at ASC
             """,
             (intake_id,),
@@ -717,6 +720,7 @@ class IntakeService:
             "route_reason": final["route_reason"],
             "model": final["model"],
             "reasoning": final["reasoning"],
+            "speed": final["speed"],
             "environment": final["environment"],
             "repository": final["repository"],
             "children": max(0, len(task_ids) - 1),
@@ -793,6 +797,8 @@ class IntakeService:
                 worker_type=draft["worker_type"],
                 owner_session=draft["owner_session"],
                 reasoning=draft["reasoning"],
+                model=draft["model"],
+                speed=draft["speed"],
                 authorization_policy=authorization_policy,
                 requires_deploy=draft["requires_deploy"],
                 state="PLANNED",
@@ -808,7 +814,9 @@ class IntakeService:
             environment=draft["environment"],
             worker_type="manager",
             owner_session="coordinator",
-            reasoning="xhigh",
+            reasoning=draft["reasoning"],
+            model=draft["model"],
+            speed=draft["speed"],
             authorization_policy=authorization_policy,
             requires_deploy=draft["requires_deploy"],
             state="PLANNED",
@@ -828,7 +836,9 @@ class IntakeService:
                 base_branch=draft.get("base_branch", ""),
                 worker_type=route.worker_type,
                 owner_session=route.owner_session,
-                reasoning=route.reasoning,
+                reasoning=draft["reasoning"],
+                model=draft["model"],
+                speed=draft["speed"],
                 authorization_policy=authorization_policy,
                 requires_deploy=(
                     draft["requires_deploy"]
@@ -841,7 +851,6 @@ class IntakeService:
             task_ids.append(child["id"])
         draft["owner_session"] = "coordinator"
         draft["worker_type"] = "manager"
-        draft["reasoning"] = "xhigh"
         draft["route_reason"] = "跨域任务由 Qingtian 拆分，coordinator 负责父任务"
         return task_ids
 
@@ -992,6 +1001,15 @@ class IntakeService:
             raise IntakeError("高级设置必须是对象")
         if "requires_deploy" in value and not isinstance(value["requires_deploy"], bool):
             raise IntakeError("requires_deploy 必须是 boolean")
+        for field in ("model", "reasoning"):
+            if field in value and (not isinstance(value[field], str) or not value[field]):
+                raise IntakeError("{} must be a nonempty string".format(field))
+        try:
+            runtime_policy(value.get("reasoning"), requested_model=value.get("model"), requested_speed=value.get("speed"))
+            runtime_policy(value.get("planner_reasoning"), requested_model=value.get("planner_model"),
+                           requested_speed=value.get("planner_speed"), role="planner")
+        except ValueError as exc:
+            raise IntakeError(str(exc)) from exc
         allowed = {
             "title",
             "scope_summary",
@@ -1001,9 +1019,16 @@ class IntakeService:
             "base_branch",
             "worker_type",
             "requires_deploy",
+            "model", "reasoning", "speed",
+            "planner_model", "planner_reasoning", "planner_speed",
         }
         clean: Dict[str, Any] = {}
         for key in allowed:
+            if key in {"model", "reasoning", "speed", "planner_model", "planner_reasoning", "planner_speed"} and key in value:
+                if not isinstance(value[key], str) or not value[key]:
+                    raise IntakeError("执行参数必须是明确非空字符串：" + key)
+                clean[key] = value[key]
+                continue
             item = value.get(key)
             if item in (None, "", False):
                 continue

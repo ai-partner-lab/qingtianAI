@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from qingtian_engine.config import load_policy, runtime_policy
 from qingtian_engine.router import route_task
 from qingtian_engine.worker_entry import build_codex_command
+from tests.atlas.capability_fixture import advertised_capabilities
 
 
 class RouterAndPolicyTest(unittest.TestCase):
@@ -23,13 +24,13 @@ class RouterAndPolicyTest(unittest.TestCase):
         )
         self.assertEqual("coordinator", route_task("Unclassified task").owner_session)
 
-    def test_policy_forces_model_reasoning_and_speed_window(self) -> None:
+    def test_policy_preserves_effort_and_speed_independently_of_time(self) -> None:
         tz = ZoneInfo("Asia/Shanghai")
         daytime = runtime_policy("low", datetime(2026, 7, 27, 9, tzinfo=tz))
         nighttime = runtime_policy("xhigh", datetime(2026, 7, 27, 21, tzinfo=tz))
         self.assertEqual("gpt-5.6-sol", daytime.model)
-        self.assertEqual("high", daytime.reasoning)
-        self.assertTrue(daytime.enable_fast_mode)
+        self.assertEqual("low", daytime.reasoning)
+        self.assertFalse(daytime.enable_fast_mode)
         self.assertEqual("xhigh", nighttime.reasoning)
         self.assertFalse(nighttime.enable_fast_mode)
 
@@ -37,10 +38,12 @@ class RouterAndPolicyTest(unittest.TestCase):
         task = {
             "reasoning": "high",
             "model": "gpt-5.6-sol",
+            "speed": "standard",
             "worktree": "/tmp/worktree",
             "repository": "",
         }
-        command = build_codex_command(task)
+        with advertised_capabilities():
+            command = build_codex_command(task)
         joined = " ".join(command)
         self.assertIn("codex exec", joined)
         self.assertIn("--json", command)

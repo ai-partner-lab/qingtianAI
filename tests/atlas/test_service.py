@@ -158,7 +158,7 @@ class ServiceTest(unittest.TestCase):
         child = self.service.create_task("下游", idempotency_key="child")
         self.service.add_dependency(child["id"], parent["id"])
         self.assertEqual(1, len(self.service.unresolved_dependencies(child["id"])))
-        self.service.add_evidence(parent["id"], "artifact", "report")
+        self.service.add_evidence(parent["id"], "artifact", "report", verified=True)
         self.service.transition(parent["id"], "DONE", force=True)
         self.assertEqual([], self.service.unresolved_dependencies(child["id"]))
 

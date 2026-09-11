@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+from tests.atlas.capability_fixture import advertised_capabilities
 from qingtian_engine.db import Database
 from qingtian_engine.project_config import register_project
 from qingtian_engine.service import ControlPlane
@@ -25,6 +26,9 @@ from qingtian_engine.worktrees import prepare_worktree
 
 class WorktreeAndWorkerTest(unittest.TestCase):
     def setUp(self) -> None:
+        capability = advertised_capabilities()
+        capability.start()
+        self.addCleanup(capability.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.service = ControlPlane(Database(self.root / "control.sqlite3"))
@@ -393,12 +397,13 @@ class WorktreeAndWorkerTest(unittest.TestCase):
     def test_resume_command_uses_captured_session(self) -> None:
         task = {
             "reasoning": "xhigh",
+            "speed": "standard",
             "model": "gpt-5.6-sol",
             "worktree": str(self.root),
             "repository": "",
         }
         command = build_codex_command(task, "019f-session", resume=True)
-        self.assertEqual(["codex", "exec", "resume"], command[:3])
+        self.assertEqual(["/synthetic/codex", "exec", "resume"], command[:3])
         self.assertIn("019f-session", command)
         self.assertEqual("-", command[-1])
 
@@ -588,6 +593,9 @@ class WorktreeAndWorkerTest(unittest.TestCase):
 
     def test_recover_marks_legacy_exit_70_as_infrastructure_failure(self) -> None:
         task = self.service.create_task("恢复执行器", idempotency_key="recover")
+        # A resumable synthetic run must capture an already prepared target;
+        # historical unprepared/missing snapshots are separately refused.
+        self._prepare_runner_worktree(self.service, task["id"], self.root)
         self.service.db.execute(
             """
             INSERT INTO runs(
@@ -631,6 +639,7 @@ class WorktreeAndWorkerTest(unittest.TestCase):
 
     def test_verification_debt_has_bounded_recoverable_retries(self) -> None:
         task = self.service.create_task("证据回填", idempotency_key="backfill")
+        self._prepare_runner_worktree(self.service, task["id"], self.root)
         self.service.db.execute(
             """
             INSERT INTO runs(
@@ -958,7 +967,7 @@ class WorktreeAndWorkerTest(unittest.TestCase):
         # Explicit UTC instants correspond to 12:00 and 00:00 Asia/Shanghai.
         # Exercise the actual policy function, not a permissive speed assertion.
         for label, fixed_now, expected_speed, expected_fast in (
-            ("day", datetime(2026, 1, 1, 4, tzinfo=timezone.utc), "fast", True),
+            ("day", datetime(2026, 1, 1, 4, tzinfo=timezone.utc), "standard", False),
             ("night", datetime(2026, 1, 1, 16, tzinfo=timezone.utc), "standard", False),
         ):
             with self.subTest(period=label):
@@ -989,13 +998,9 @@ class WorktreeAndWorkerTest(unittest.TestCase):
                     pid = os.getpid()
 
                 manager = RunManager(service, self.root / label)
-                with patch("qingtian_engine.runner.subprocess.Popen", return_value=Spawned()), patch(
-                    "qingtian_engine.runner.runtime_policy",
-                    side_effect=lambda requested: runtime_policy(requested, now=fixed_now),
-                ) as policy_call:
+                with patch("qingtian_engine.runner.subprocess.Popen", return_value=Spawned()):
                     result = manager.reconcile_dispatch_queue(max_new=1, max_active=1)
 
-                policy_call.assert_called_once_with("high")
                 self.assertEqual([first["id"]], [item["task_id"] for item in result["claimed"]])
                 selected = service.get_task(first["id"])
                 self.assertEqual("gpt-5.6-sol", selected["model"])

@@ -273,7 +273,7 @@ class IntakeHTTPTest(unittest.TestCase):
         self.service.set_human_action(
             user["id"], "user", owner="你", text="新增 redirect URI"
         )
-        body = b"{}"
+        body = json.dumps({"expected_action_version": self.service.get_task(user["id"])["action_version"]}).encode()
         status, _headers, raw = self.request(
             "POST",
             "/api/tasks/{}/complete-human-action".format(user["id"]),

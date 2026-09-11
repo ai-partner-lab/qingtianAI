@@ -9,6 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from tests.atlas.capability_fixture import advertised_capabilities
 from qingtian_engine.db import Database
 from qingtian_engine.intake import (
     CodexPlannerAdapter,
@@ -27,6 +28,9 @@ PNG = b"\x89PNG\r\n\x1a\n" + b"safe-local-test" * 4
 
 class IntakeServiceTest(unittest.TestCase):
     def setUp(self) -> None:
+        capability = advertised_capabilities()
+        capability.start()
+        self.addCleanup(capability.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.control = ControlPlane(Database(self.root / "control.sqlite3"))
@@ -294,12 +298,12 @@ class IntakeServiceTest(unittest.TestCase):
                             "local_path": attachment_path,
                         }
                     ],
-                    {},
+                    {"planner_model": "gpt-6-astra", "planner_reasoning": "xhigh", "planner_speed": "standard"},
                 ),
             )
         command = run.call_args.args[0]
-        self.assertIn("gpt-5.6-sol", command)
-        self.assertIn("model_reasoning_effort=xhigh", command)
+        self.assertEqual("gpt-6-astra", command[command.index("-m") + 1])
+        self.assertIn('model_reasoning_effort="xhigh"', command)
         self.assertIn("--ephemeral", command)
         self.assertEqual("read-only", command[command.index("--sandbox") + 1])
         self.assertNotIn(attachment_path, run.call_args.kwargs["input"])
