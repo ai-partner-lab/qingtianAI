@@ -966,27 +966,37 @@ class ProtocolTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "posix", "POSIX process-group lifetime test")
     def test_inherited_stdout_cleanup_is_bounded_and_leaks_no_live_resources(self):
         peer = r'''
-import json,pathlib,subprocess,sys
+import json,pathlib,subprocess,sys,time
 r=json.loads(sys.stdin.readline())
+child=subprocess.Popen([sys.executable,'-c',
+    'import os,pathlib,signal,sys,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); time.sleep(30)',
+    sys.argv[1]],stdin=subprocess.DEVNULL)
+while not pathlib.Path(sys.argv[1]).exists():
+    time.sleep(.005)
 print(json.dumps({'id':r['id'],'result':{}}),flush=True)
 for line in sys.stdin:
     if json.loads(line).get('method')=='read':
-        child=subprocess.Popen([sys.executable,'-c','import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(4)'],stdin=subprocess.DEVNULL)
-        pathlib.Path(sys.argv[1]).write_text(str(child.pid))
         break
 '''
         with tempfile.TemporaryDirectory() as temporary:
             pid_path = Path(temporary) / "child.pid"
             sentinel = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True)
             try:
-                client = entry.AppServerClient([sys.executable, "-u", "-c", peer, str(pid_path)], cwd=Path.cwd(), timeout=.1)
-                started = time.monotonic()
-                with self.assertRaises(entry.EntryError) as error:
-                    with client:
-                        read_fd = client.process.stdout.fileno()
-                        write_fd = client.process.stdin.fileno()
+                client = entry.AppServerClient([sys.executable, "-u", "-c", peer, str(pid_path)], cwd=Path.cwd(), timeout=2)
+                # Startup is not the operation under test. The peer acknowledges
+                # initialize only after its SIGTERM-ignoring descendant is ready.
+                # Keep the read + cleanup budget strict, independently of CI's
+                # Python startup latency; unexpected initialize errors must fail.
+                with client:
+                    read_fd = client.process.stdout.fileno()
+                    write_fd = client.process.stdin.fileno()
+                    child_pid = int(pid_path.read_text())
+                    started = time.monotonic()
+                    client.deadline = started + .1
+                    with self.assertRaises(entry.EntryError) as error:
                         client.call("read", {})
                 self.assertEqual(error.exception.code, "timeout")
+                self.assertEqual(error.exception.method, "read")
                 self.assertLess(time.monotonic() - started, 1.5)
                 self.assertFalse(client.reader.is_alive())
                 self.assertIsNotNone(client.process.poll())
@@ -995,7 +1005,6 @@ for line in sys.stdin:
                 for fd in (read_fd, write_fd):
                     with self.assertRaises(OSError):
                         os.fstat(fd)
-                child_pid = int(pid_path.read_text())
                 for _ in range(20):
                     state = subprocess.run(["ps", "-o", "stat=", "-p", str(child_pid)], capture_output=True, text=True, timeout=1).stdout.strip()
                     if not state or state.startswith("Z"):
@@ -1006,6 +1015,23 @@ for line in sys.stdin:
             finally:
                 sentinel.kill()
                 sentinel.wait(timeout=2)
+
+    def test_initialize_timeout_cleans_up_before_context_body(self):
+        peer = "import time; time.sleep(30)"
+        client = entry.AppServerClient([sys.executable, "-u", "-c", peer], cwd=Path.cwd(), timeout=.1)
+        entered = False
+        started = time.monotonic()
+        with self.assertRaises(entry.EntryError) as error:
+            with client:
+                entered = True
+        self.assertFalse(entered)
+        self.assertEqual(error.exception.code, "timeout")
+        self.assertEqual(error.exception.method, "initialize")
+        self.assertLess(time.monotonic() - started, 1.5)
+        self.assertFalse(client.reader.is_alive())
+        self.assertIsNotNone(client.process.poll())
+        self.assertTrue(client.process.stdout.closed)
+        self.assertTrue(client.process.stdin.closed)
 
     def test_unread_stdin_respects_deadline_and_reader_stops(self):
         peer = "import json,sys,time\nr=json.loads(sys.stdin.readline())\nprint(json.dumps({'id':r['id'],'result':{}}),flush=True)\ntime.sleep(30)\n"
