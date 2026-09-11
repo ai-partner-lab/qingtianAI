@@ -203,7 +203,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/qingtian-playwright-browsers
       PYTHONDONTWRITEBYTECODE: "1"
     steps:
       - name: Check out source
@@ -213,6 +212,8 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install the pinned browser runner and matching Chromium
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/qingtian-playwright-browsers
         shell: bash
         run: |
           set -euo pipefail
@@ -223,6 +224,8 @@ jobs:
           python -m playwright install --with-deps chromium 2>&1 \
             | tee "$RUNNER_TEMP/qingtian-engine-browser/chromium-install.log"
       - name: Run the mandatory real-browser current-engine journey
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/qingtian-playwright-browsers
         shell: bash
         run: |
           set -euo pipefail
