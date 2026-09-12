@@ -202,6 +202,24 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
             raise ValueError("JSON body must be an object")
         return payload
 
+    def _drain_rejected_body(self, length: int, maximum: int = 256 * 1024) -> None:
+        """Drain a modest rejected request before closing its HTTP/1.1 socket.
+
+        Closing a socket with unread request bytes can make some TCP stacks send
+        a reset before the client receives our structured error response.  Keep
+        this deliberately bounded: normal near-limit mistakes get a reliable
+        response, while an attacker cannot make the server consume an arbitrary
+        advertised body.
+        """
+        if length < 0 or length > maximum:
+            return
+        remaining = length
+        while remaining:
+            block = self.rfile.read(min(64 * 1024, remaining))
+            if not block:
+                return
+            remaining -= len(block)
+
     def _read_body(self, maximum: int) -> bytes:
         if self.headers.get("Transfer-Encoding"):
             self.close_connection = True
@@ -501,6 +519,8 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
                     # frames before reading so a valid truncated prefix cannot write.
                     length = int(self.headers.get("Content-Length", "0"))
                     if length < 0 or length > 64 * 1024 or self.headers.get("Transfer-Encoding"):
+                        if length > 64 * 1024 and not self.headers.get("Transfer-Encoding"):
+                            self._drain_rejected_body(length)
                         self.close_connection = True
                         raise ReleaseError("release JSON body must be at most 64 KiB")
                     payload = self._read_json()
