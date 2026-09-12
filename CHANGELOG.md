@@ -30,9 +30,11 @@ unverified and must be reported separately from credential-free fixture results.
   Migrated revision 0 is a baseline, not reconstructed history. Success enters
   VERIFYING only and never grants sensitive-action, budget or deployment approval.
 - Make new execution parameters exact and fail closed: only Sol/Astra, reasoning
-  `low` through `ultra` without clamp, and independent standard/fast speed. Role
+  `medium`, `high`, `xhigh` or `ultra` without clamp, and independent standard/fast speed. Role
   defaults are manager Astra/ultra/fast and executor/planner Sol/high/standard;
-  explicit arguments outrank environment and route/default selection.
+  explicit arguments outrank environment and route/default selection. Add a matching
+  public policy example, role-default selftests and a source-checkout real Worker
+  selfcheck that verifies the run's persisted tuple instead of one hard-coded model.
 - Require a manually reviewed, private, 24-hour schema-2 local Codex capability
   manifest for real execution. Add read-only `capabilities status` and explicit,
   non-overwriting `capabilities prepare`; neither reads credentials/conversations,

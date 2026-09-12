@@ -238,6 +238,66 @@ class IntakeHTTPTest(unittest.TestCase):
         self.assertEqual("delegated", payload["execution_mode"])
         self.assertEqual([], payload["runs"])
 
+    def test_local_api_registers_exact_role_policy_selections(self) -> None:
+        for index, (model, reasoning) in enumerate((
+            ("gpt-6-astra", "high"),
+            ("gpt-5.6-sol", "medium"),
+            ("gpt-5.6-sol", "high"),
+        )):
+            task = self.service.create_task(
+                "API model registration {}".format(index),
+                idempotency_key="api-model-registration-{}".format(index),
+            )
+            body = json.dumps({
+                "mode": "delegated",
+                "model": model,
+                "reasoning": reasoning,
+                "speed": "standard",
+            }).encode()
+            status, _headers, raw = self.request(
+                "POST", "/api/tasks/{}/heartbeat".format(task["id"]), body,
+                {"Content-Type": "application/json", "Content-Length": str(len(body))},
+            )
+            payload = json.loads(raw)
+            self.assertEqual(200, status)
+            self.assertEqual((model, reasoning), (payload["model"], payload["reasoning"]))
+            self.assertEqual("standard", payload["speed"])
+
+    def test_local_api_rejects_below_floor_or_unsupported_effort_without_writes(self) -> None:
+        for index, (model, reasoning) in enumerate((
+            ("gpt-5.5", "high"),
+            ("gpt-5.6-terra", "high"),
+            ("gpt-5.3-codex-spark", "high"),
+            ("gpt-6-astra-latest", "high"),
+            ("gpt-5.6-sol", "low"),
+            ("gpt-6-astra", "unsupported"),
+        )):
+            task = self.service.create_task(
+                "API rejected model registration {}".format(index),
+                idempotency_key="api-rejected-model-registration-{}".format(index),
+            )
+            before = self.service.get_task(task["id"])
+            event_count = self.service.db.one(
+                "SELECT COUNT(*) AS count FROM events WHERE task_id=?", (task["id"],)
+            )["count"]
+            body = json.dumps({
+                "mode": "delegated", "model": model, "reasoning": reasoning,
+            }).encode()
+            status, _headers, raw = self.request(
+                "POST", "/api/tasks/{}/heartbeat".format(task["id"]), body,
+                {"Content-Type": "application/json", "Content-Length": str(len(body))},
+            )
+            self.assertEqual(400, status)
+            self.assertIn("MODEL_POLICY", json.loads(raw)["error"])
+            self.assertEqual(before, self.service.get_task(task["id"]))
+            self.assertEqual(
+                event_count,
+                self.service.db.one(
+                    "SELECT COUNT(*) AS count FROM events WHERE task_id=?",
+                    (task["id"],),
+                )["count"],
+            )
+
     def test_health_exposes_watchdog_status(self) -> None:
         ControlPlaneHandler.watchdog_health = {
             "last_success_at": "2026-07-27T00:00:00+00:00",

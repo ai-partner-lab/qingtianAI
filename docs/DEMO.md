@@ -17,7 +17,7 @@ qingtian selftest
 qingtian quickstart --open
 ```
 
-selftest 在临时库运行 8 项无凭据检查，明确返回 `model_called=false`、`business_acceptance=false`。检查覆盖状态、幂等、证据门、manual 不领取、持久化、SQLite 完整性与看板投影；不启动 HTTP 服务或浏览器。quickstart 首次使用新数据目录时启动真实空库，重启会保留该目录已有任务；“能力与上手”支持下一步、上一步及展开能力。浏览说明不创建/推进任务。
+selftest 在临时库运行 11 项无凭据检查，明确返回 `model_called=false`、`business_acceptance=false`。检查覆盖三种角色默认、状态、幂等、证据门、manual 不领取、持久化、SQLite 完整性与看板投影；不启动 HTTP 服务或浏览器。quickstart 首次使用新数据目录时启动真实空库，重启会保留该目录已有任务；“能力与上手”支持下一步、上一步及展开能力。浏览说明不创建/推进任务。
 
 quickstart 默认后台运行，关闭终端不会停止；请用同一数据目录的 `qingtian stop`。需要隔离演示时使用下述 tour，或按 [接入手册](ADOPTION.md) 选择新的私有数据目录。
 

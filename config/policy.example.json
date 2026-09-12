@@ -1,0 +1,43 @@
+{
+  "dev_verification": {
+    "full_suite_by_default": false,
+    "affected_tests": true,
+    "minimal_post_deploy_smoke": true
+  },
+  "production": {
+    "automatic_deploy": false,
+    "requires_explicit_release_gate": true
+  },
+  "storage": {
+    "store_full_prompt": false,
+    "store_raw_codex_jsonl": false,
+    "redact_email": true,
+    "max_summary_chars": 500
+  },
+  "experimental": {
+    "app_server_enabled": false,
+    "hatchet_enabled": false,
+    "openhands_enabled": false,
+    "langfuse_enabled": false,
+    "dify_enabled": false
+  },
+  "schema_version": 2,
+  "defaults": {
+    "executor": {
+      "model": "gpt-5.6-sol",
+      "reasoning": "high",
+      "speed": "standard"
+    },
+    "manager": {
+      "model": "gpt-6-astra",
+      "reasoning": "ultra",
+      "speed": "fast"
+    },
+    "planner": {
+      "model": "gpt-5.6-sol",
+      "reasoning": "high",
+      "speed": "standard"
+    }
+  },
+  "assurance": "New-selection defaults only; not host capability, execution, or business authorization"
+}

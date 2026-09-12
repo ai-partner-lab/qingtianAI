@@ -11,7 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from qingtian_engine.config import load_policy, runtime_policy
+from qingtian_engine.config import DEFAULT_POLICY_PATH, load_policy, runtime_policy
 from tests.atlas.capability_fixture import advertised_capabilities
 from qingtian_engine.db import Database, SCHEMA
 from qingtian_engine.intake import CodexPlannerAdapter, DeterministicPlannerAdapter, IntakeError, IntakeService
@@ -46,18 +46,100 @@ class ModelPolicyTest(unittest.TestCase):
         with patch.dict(os.environ, {"QINGTIAN_MODEL": "gpt-5.6-sol", "QINGTIAN_REASONING": "high"}):
             self.assert_selection(self.service.reroute(task["id"]))
 
+    def test_role_defaults_are_distinct_and_policy_example_matches_package(self):
+        example = Path(__file__).parents[2] / "config" / "policy.example.json"
+        self.assertEqual(load_policy(DEFAULT_POLICY_PATH), load_policy(example))
+        with patch.dict(os.environ, {}, clear=True):
+            manager = runtime_policy(role="manager")
+            executor = runtime_policy(role="executor")
+            planner = runtime_policy(role="planner")
+        self.assertEqual(
+            ("gpt-6-astra", "ultra", "fast"),
+            (manager.model, manager.reasoning, manager.speed),
+        )
+        for selected in (executor, planner):
+            self.assertEqual(
+                ("gpt-5.6-sol", "high", "standard"),
+                (selected.model, selected.reasoning, selected.speed),
+            )
+
     def test_explicit_selection_beats_environment_and_has_no_silent_clamping(self):
-        task = self.service.create_task("Explicit task", model="gpt-5.6-sol", reasoning="high")
-        self.assert_selection(task, "gpt-5.6-sol", "high")
-        low = self.service.create_task("Explicit low task", model="gpt-6-astra", reasoning="low")
-        self.assertEqual("low", low["reasoning"])
-        for model in ("gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"):
+        for index, (model, effort) in enumerate((
+            ("gpt-5.6-sol", "medium"),
+            ("gpt-5.6-sol", "high"),
+            ("gpt-6-astra", "high"),
+            ("gpt-6-astra", "xhigh"),
+            ("gpt-6-astra", "ultra"),
+        )):
+            task = self.service.create_task(
+                "Explicit task {}".format(index), model=model, reasoning=effort
+            )
+            self.assert_selection(task, model, effort)
+        for model in (
+            "gpt-5.6-terra",
+            "gpt-5.6-luna",
+            "gpt-5.3-codex-spark",
+            "gpt-5.5",
+            "gpt-6-astra-latest",
+        ):
             with self.assertRaisesRegex(ValueError, "MODEL_POLICY"):
                 self.service.create_task("Below floor", model=model)
-        policy = load_policy()
-        policy["minimum_reasoning"] = "low"
-        selected = runtime_policy("low", policy=policy, explicit_reasoning=True)
-        self.assertEqual("low", selected.reasoning)
+        for effort in ("none", "minimal", "low", "max", "bogus"):
+            with self.assertRaisesRegex(ValueError, "MODEL_POLICY"):
+                self.service.create_task(
+                    "Unsupported effort " + effort,
+                    model="gpt-6-astra",
+                    reasoning=effort,
+                )
+
+    def test_external_registration_preserves_each_accepted_selection_exactly(self):
+        for index, (model, effort) in enumerate((
+            ("gpt-6-astra", "high"),
+            ("gpt-5.6-sol", "medium"),
+            ("gpt-5.6-sol", "high"),
+        )):
+            task = self.service.create_task(
+                "External registration {}".format(index), state="VERIFYING"
+            )
+            updated = self.service.heartbeat_task(
+                task["id"], execution_mode="delegated", model=model,
+                reasoning=effort, speed="standard",
+            )
+            self.assert_selection(updated, model, effort)
+            self.assertEqual("standard", updated["speed"])
+            self.assertEqual("delegated", updated["execution_mode"])
+            self.assertEqual([], updated["runs"])
+
+    def test_external_registration_rejects_policy_mismatch_without_mutation(self):
+        for index, (model, effort) in enumerate((
+            ("gpt-5.6-terra", "high"),
+            ("gpt-5.3-codex-spark", "high"),
+            ("gpt-5.5", "xhigh"),
+            ("gpt-5.6-sol", "low"),
+            ("gpt-6-astra", "max"),
+            ("gpt-6-astra", "unsupported"),
+        )):
+            task = self.service.create_task(
+                "Rejected registration {}".format(index), state="VERIFYING"
+            )
+            before = self.service.get_task(task["id"])
+            event_count = self.service.db.one(
+                "SELECT COUNT(*) AS count FROM events WHERE task_id=?",
+                (task["id"],),
+            )["count"]
+            with self.assertRaisesRegex(ValueError, "MODEL_POLICY"):
+                self.service.heartbeat_task(
+                    task["id"], execution_mode="delegated", model=model,
+                    reasoning=effort, speed="standard",
+                )
+            self.assertEqual(before, self.service.get_task(task["id"]))
+            self.assertEqual(
+                event_count,
+                self.service.db.one(
+                    "SELECT COUNT(*) AS count FROM events WHERE task_id=?",
+                    (task["id"],),
+                )["count"],
+            )
 
     def test_invalid_environment_and_explicit_settings_fail_closed(self):
         for settings in ({"QINGTIAN_MODEL": ""}, {"QINGTIAN_MODEL": "bad model --flag"}, {"QINGTIAN_REASONING": "invalid"}):
@@ -98,17 +180,55 @@ class ModelPolicyTest(unittest.TestCase):
         self.assertEqual("DONE", run["status"])
         self.assertEqual(("", "", ""), (run["model"], run["reasoning"], run["speed"]))
 
+    def test_existing_out_of_policy_history_remains_readable_and_unchanged(self):
+        task = self.service.create_task("Legacy selection", state="DONE")
+        self.service.db.execute(
+            "UPDATE tasks SET model='gpt-5.5', reasoning='low' WHERE id=?",
+            (task["id"],),
+        )
+        self.service.db.execute(
+            """INSERT INTO runs(
+                   id,task_id,attempt,adapter,command_summary,model,reasoning,
+                   speed,status,created_at
+               ) VALUES(
+                   'legacy-selection-run',?,1,'cli','historical only',
+                   'gpt-5.5','low','standard','DONE','old'
+               )""",
+            (task["id"],),
+        )
+        before_task = self.service.db.one(
+            "SELECT * FROM tasks WHERE id=?", (task["id"],)
+        )
+        before_run = self.service.db.one(
+            "SELECT * FROM runs WHERE id='legacy-selection-run'"
+        )
+
+        self.service.db.initialize()
+
+        self.assertEqual(
+            before_task,
+            self.service.db.one("SELECT * FROM tasks WHERE id=?", (task["id"],)),
+        )
+        self.assertEqual(
+            before_run,
+            self.service.db.one("SELECT * FROM runs WHERE id='legacy-selection-run'"),
+        )
+
     def test_intake_and_split_children_keep_explicit_selection(self):
         intake = IntakeService(self.service, self.root)
         for index, text in enumerate(("Implement a frontend modal", "同时实现前端页面以及后端 API migration")):
             result = intake.create_intake(text, "analyze", [], "synthetic-" + str(index),
-                advanced={"model": "gpt-6-astra", "reasoning": "xhigh"})
+                advanced={"model": "gpt-5.6-sol", "reasoning": "medium", "speed": "fast"})
             self.assertEqual("ROUTED", result["status"])
-            self.assert_selection(result["draft"])
+            self.assert_selection(result["draft"], "gpt-5.6-sol", "medium")
+            self.assertEqual("fast", result["draft"]["speed"])
             for task in result["tasks"]:
-                self.assert_selection(task)
+                self.assert_selection(task, "gpt-5.6-sol", "medium")
+                self.assertEqual("fast", task["speed"])
             if index:
                 self.assertGreater(len(result["tasks"]), 1)
+                parent = next(task for task in result["tasks"] if not task["parent_id"])
+                self.assertEqual("manager", parent["worker_type"])
         with self.assertRaises(IntakeError):
             intake.create_intake("Invalid model setting", "analyze", [], "invalid", advanced={"reasoning": "invalid"})
 

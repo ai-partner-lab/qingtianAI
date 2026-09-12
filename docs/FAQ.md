@@ -34,7 +34,7 @@ run 是一次执行尝试。任务完成还要满足 profile 对 verified 证据
 
 ### 9. selftest 检查什么？失败如何处理？
 
-它使用临时合成数据检查状态、幂等、证据门、manual 不领取、持久化、SQLite 完整性和看板投影，共 8 项。不启动 HTTP、不测试附件、不调用模型或外网。失败时先运行 `doctor`，记录 Python/包版本和失败检查 ID 或异常，在隔离目录定位；不要把它的通过当成 Codex 或业务验收。
+它使用临时合成数据检查 manager/executor/planner 三种角色默认、状态、幂等、证据门、manual 不领取、持久化、SQLite 完整性和看板投影，共 11 项。不启动 HTTP、不测试附件、不调用模型或外网。失败时先运行 `doctor`，记录 Python/包版本和失败检查 ID 或异常，在隔离目录定位；不要把它的通过当成 Codex 或业务验收。
 
 ### 10. stop 后为什么 Worker 仍在运行？
 

@@ -58,7 +58,7 @@ run 字段保留 `id,task_id,attempt,adapter,pid,process_group,session_id,status
 
 字段默认值如上；title 应非空。`auto_start` 必须是 JSON boolean。仅当它为 true 且提供非空 `instruction` 时，此入口才调用 dispatch。创建成功本身不是派发回执。repository 可指定已注册项目名或精确仓库路径；base_branch 必须与注册配置及可用 Git 基线一致。多项目角色匹配不唯一时需要显式选择，不能猜测。
 
-可另传当前入口支持的执行参数。所有新选择只接受 `gpt-5.6-sol` / `gpt-6-astra`、`low` / `medium` / `high` / `xhigh` / `max` / `ultra` 及独立的 `standard` / `fast`，不 clamp。优先级为显式参数 > 环境变量 > 路由/角色默认；完整边界见[模型与推理配置](ADOPTION.md#模型与推理配置)。格式接受仍不代表账户支持。
+可另传当前入口支持的执行参数。所有新选择只接受 `gpt-5.6-sol` / `gpt-6-astra`、`medium` / `high` / `xhigh` / `ultra` 及独立的 `standard` / `fast`，不 clamp。优先级为显式参数 > 环境变量 > 路由/角色默认；完整边界见[模型与推理配置](ADOPTION.md#模型与推理配置)。格式接受仍不代表账户支持。
 
 **此 HTTP 入口当前不转发 `Idempotency-Key` 或 body 的 `idempotency_key`。** 不要对超时的创建请求盲目重放；需要可重放收件流程时使用 intake 接口。
 

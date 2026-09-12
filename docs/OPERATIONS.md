@@ -48,6 +48,16 @@ CLI 没有 `health`、`task dispatch`、`task cancel` 或 `task reconcile` 子�
 
 先运行只读 `qingtian capabilities status`，再对照[模型/推理优先级](ADOPTION.md#模型与推理配置)、目标任务、HTTP admission 和 run 的持久选择。缺失/过期/失配 manifest 或未广告的目标组合失败闭合；按 [能力清单流程](CODEX-CAPABILITIES.md)在私有新路径准备并人工审查，不修改旧清单时间。新 run 冻结七字段目标；旧历史缺完整不可变快照就拒绝 resume，不从当前任务/环境猜测，也不补写旧行。未调用 provider 时只能确认配置和本机 advertisement，不能宣称账户权限、served tier、额度或真实执行。
 
+源码 checkout 另带一个显式真实 Worker 自检；它与无凭据的 `qingtian selftest` 不同，会消耗一次真实模型调用。先核对当前登录、能力清单和输出目录，再运行：
+
+```bash
+python3 scripts/live_selfcheck.py --run \
+  --output-root /absolute/private/path/qingtian-selfchecks \
+  --model gpt-5.6-sol --reasoning high --speed standard
+```
+
+脚本只创建全新的合成 Git 仓库和任务库，并以 run 中持久登记的 model/reasoning 为真值核对实际 session；不会再把 Astra/xhigh 写死为唯一通过条件。它不验证业务仓库、发布或生产。不要把 `--output-root` 指向现有引擎数据目录、源码 checkout 或业务仓库；不应为运行该脚本重启已有服务。
+
 SSE 的整板 `version` 与已消费 `cursor` 分开：积压页的快照版本可相同，但 changes 必须逐页处理；`has_more` 表示还在补收。浏览器在成功消费帧后保存新的 `qingtian-event-cursor`，不会把旧 `qingtian-event-version` 快照缓存迁移为消费进度。旧会话首次升级可能从 0 补页；正常的低频 REST 刷新不确认 SSE 事件。重连用 header 优先的 `Last-Event-ID`，reset/换实例处理见 [SSE 合同](ENGINE-API.md#sse-版本合同)。
 
 ## 任务排障顺序

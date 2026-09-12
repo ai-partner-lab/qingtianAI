@@ -21,7 +21,8 @@ from qingtian_engine.worker_entry import build_codex_command
 NOW = datetime(2026, 9, 11, 10, tzinfo=timezone.utc)
 OBSERVED = "2026-09-11T09:00:00Z"
 EXPIRES = "2026-09-11T11:00:00Z"
-EFFORTS = ["low", "medium", "high", "xhigh", "max", "ultra"]
+CATALOG_EFFORTS = ["low", "medium", "high", "xhigh", "max", "ultra"]
+POLICY_EFFORTS = ["medium", "high", "xhigh", "ultra"]
 UUID = "12e767f0-0790-4940-9aca-b87e5f6063ae"
 
 
@@ -36,7 +37,7 @@ class CapabilityTests(unittest.TestCase):
         self.catalog_file = self.root / "models_cache.json"
         self.file = self.root / "reviewed.json"
         self.catalog = {"client_version": "0.153.4", "fetched_at": OBSERVED,
-            "models": [{"slug": model, "supported_reasoning_levels": [{"effort": e} for e in EFFORTS],
+            "models": [{"slug": model, "supported_reasoning_levels": [{"effort": e} for e in CATALOG_EFFORTS],
                         "service_tiers": [{"id": "priority"}]} for model in ("gpt-5.6-sol", "gpt-6-astra")]}
         self.manifest = {"schema_version": 2, "adapter": "codex-cli",
             "host_identity": {"kind": "macos-ioplatformuuid-sha256", "sha256": hashlib.sha256(("macos-ioplatformuuid-sha256:" + UUID).encode()).hexdigest()},
@@ -44,7 +45,7 @@ class CapabilityTests(unittest.TestCase):
             "cli_version": "0.153.4", "binary_sha256": hashlib.sha256(self.binary.read_bytes()).hexdigest(),
             "source_kind": "codex-local-model-cache-v1", "source_ref": str(self.catalog_file),
             "observed_at": OBSERVED, "expires_at": EXPIRES,
-            "models": {model: {"reasoning": EFFORTS[:], "speed": ["standard", "fast"]} for model in ("gpt-5.6-sol", "gpt-6-astra")}}
+            "models": {model: {"reasoning": POLICY_EFFORTS[:], "speed": ["standard", "fast"]} for model in ("gpt-5.6-sol", "gpt-6-astra")}}
         self.write_catalog()
         self.write_manifest()
         self.attempts = []
@@ -179,7 +180,7 @@ class CapabilityTests(unittest.TestCase):
 
     def test_matching_host_valid_source_exact_tuple_fresh_and_resume(self):
         for model in self.manifest["models"]:
-            for effort in EFFORTS:
+            for effort in POLICY_EFFORTS:
                 for speed in ("standard", "fast"):
                     for resume in (False, True):
                         with self.subTest(model=model, effort=effort, speed=speed, resume=resume):

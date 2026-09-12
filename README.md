@@ -60,7 +60,7 @@ qingtian quickstart --open
 - 默认数据目录是 `~/.local/share/qingtian/engine`，不写源码或安装目录；支持 `QINGTIAN_ENGINE_HOME` 或全局 `--data-dir`。
 - `qingtian stop` 停止该数据目录的控制台，不等于取消已派发的独立 Worker。
 - `qingtian tour --port 8767 --open` 用临时库展示**同一引擎**的合成卡片；Ctrl+C 退出清理，不调用模型。
-- `qingtian selftest` 无凭据核验状态、幂等、证据门、持久化和 manual 不自动派发。
+- `qingtian selftest` 无凭据核验三种角色默认、状态、幂等、证据门、持久化和 manual 不自动派发。
 - 当前没有多用户认证，不要向公网开放端口。
 
 ## 执行自己的真实项目
@@ -86,7 +86,7 @@ qingtian feedback --consumer maintainer --peek
 
 真实 Codex 必须显式接入。执行采用 stdin + `codex exec --json`，不绕过沙箱。[官方非交互执行说明](https://learn.chatgpt.com/docs/non-interactive-mode)
 
-新执行仅接受 `gpt-5.6-sol` / `gpt-6-astra`、精确的 `low` 至 `ultra` 推理枚举及独立的 `standard` / `fast` 速度，不做 clamp。manager 默认 Astra/ultra/fast，executor 与 planner 默认 Sol/high/standard；显式参数 > 环境变量 > 路由/角色默认。执行还要求使用者人工审查并显式启用仍有效的本机 capability manifest；本机广告不证明账户权限、额度或实际 served tier。新 run 冻结七个执行目标参数；旧历史缺完整不可变快照时拒绝 resume，不猜测或回填。[配置与续接](docs/ADOPTION.md#模型与推理配置) · [能力清单](docs/CODEX-CAPABILITIES.md)
+新执行仅接受 `gpt-5.6-sol` / `gpt-6-astra`、精确的 `medium` / `high` / `xhigh` / `ultra` 推理枚举及独立的 `standard` / `fast` 速度，不做 clamp。manager 默认 Astra/ultra/fast，executor 与 planner 默认 Sol/high/standard；显式参数 > 环境变量 > 路由/角色默认。执行还要求使用者人工审查并显式启用仍有效的本机 capability manifest；本机广告不证明账户权限、额度或实际 served tier。新 run 冻结七个执行目标参数；旧历史缺完整不可变快照时拒绝 resume，不猜测或回填。[配置与续接](docs/ADOPTION.md#模型与推理配置) · [能力清单](docs/CODEX-CAPABILITIES.md)
 
 manual 可写并允许明确 dispatch 或实施请求，不是只读。auto 会自动领取符合规则的任务，请先在隔离环境理解其范围。[接入手册](docs/ADOPTION.md)
 

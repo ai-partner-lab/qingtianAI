@@ -5,6 +5,12 @@ from pathlib import Path
 import tempfile
 
 from .cli import build_service
+from .config import (
+    DEFAULT_POLICY_PATH,
+    EXECUTION_SPEEDS,
+    load_policy,
+    require_execution_model,
+)
 from .runtime_mode import background_cycle
 from .runner import RunManager
 
@@ -17,6 +23,25 @@ def run_selftest():
             raise AssertionError(identifier)
     with tempfile.TemporaryDirectory(prefix="qingtian-selftest-") as temporary:
         root = Path(temporary)
+        policy = load_policy(DEFAULT_POLICY_PATH)
+        expected_defaults = {
+            "manager": ("gpt-6-astra", "ultra", "fast"),
+            "executor": ("gpt-5.6-sol", "high", "standard"),
+            "planner": ("gpt-5.6-sol", "high", "standard"),
+        }
+        for role, expected in expected_defaults.items():
+            configured = policy.get("defaults", {}).get(role, {})
+            actual = (
+                configured.get("model"),
+                configured.get("reasoning"),
+                configured.get("speed"),
+            )
+            try:
+                require_execution_model(actual[0], actual[1])
+                valid = actual[2] in EXECUTION_SPEEDS
+            except ValueError:
+                valid = False
+            check("role-policy-default-" + role, valid and actual == expected)
         service = build_service(root)
         check("fresh-empty-database", not service.list_tasks())
         task = service.create_task("Synthetic artifact", idempotency_key="selftest-once",

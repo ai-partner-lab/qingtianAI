@@ -10,7 +10,7 @@
 
 rc2 为新 HTTP dispatch 添加 revisioned admission request/receipt，并对实际创建的新 run 冻结七个不可变目标字段：model、reasoning、speed、worker type、owner session、branch、worktree。既有 run 列原样保留；旧历史若没有完整不可变快照，resume 失败闭合，不从任务字段、环境或当前默认猜测，不回填旧记录。intake/retry/auto/external-host ack 尚未统一到此接纳合同。详见 [配置与续接](ADOPTION.md#模型与推理配置)。
 
-模型迁移不做宽松兼容：新选择只允许 Sol/Astra、六个 `low..ultra` effort 和独立 standard/fast，且不 clamp。默认值只作用于新选择，不改正在执行或历史参数。真实执行还要求使用者在源码/数据/发布目录之外保存人工审查、最多 24 小时有效的 schema-2 capability manifest；它含本机敏感路径/指纹，不迁入公库或发布包。[准备与启用](CODEX-CAPABILITIES.md)
+模型迁移不做宽松兼容：新选择只允许 Sol/Astra、`medium/high/xhigh/ultra` effort 和独立 standard/fast，且不 clamp。默认值只作用于新选择，不改正在执行或历史参数。真实执行还要求使用者在源码/数据/发布目录之外保存人工审查、最多 24 小时有效的 schema-2 capability manifest；它含本机敏感路径/指纹，不迁入公库或发布包。[准备与启用](CODEX-CAPABILITIES.md)
 
 rc2 的 operations、admission 与 release 表/trigger 是追加结构，不重写既有 task/run/event/evidence 行。运维更正保留 native baseline 和旧/新值，作为补充投影而非覆盖原列；release batch/receipt 只登记声明式事实，不部署，也不从历史 DONE 合成发布记录。旧事实缺少可靠来源或当前 basis 时保持未知/stale。
 

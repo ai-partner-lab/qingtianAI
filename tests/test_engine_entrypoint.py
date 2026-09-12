@@ -20,7 +20,15 @@ class EngineEntryPointTests(unittest.TestCase):
         self.assertFalse(result["model_called"])
         self.assertFalse(result["business_acceptance"])
         self.assertEqual(result["legacy_tasks_imported"], 0)
-        self.assertEqual(len(result["checks"]), 8)
+        self.assertEqual(len(result["checks"]), 11)
+        self.assertEqual(
+            {
+                "role-policy-default-manager",
+                "role-policy-default-executor",
+                "role-policy-default-planner",
+            },
+            {item["id"] for item in result["checks"] if item["id"].startswith("role-policy-")},
+        )
 
     def test_command_name_inside_title_does_not_hijack_parser(self):
         args = ["task", "add", "--title", "tour"]

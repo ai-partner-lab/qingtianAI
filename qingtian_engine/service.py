@@ -2094,7 +2094,7 @@ class ControlPlane:
             ),
             "policy": {
                 "model": policy.model,
-                "minimum_reasoning": "low",
+                "minimum_reasoning": "medium",
                 "reasoning": policy.reasoning,
                 "allowed_models": sorted(EXECUTION_MODELS),
                 "model_floor": "gpt-5.6-sol",

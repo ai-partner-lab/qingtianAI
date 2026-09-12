@@ -12,7 +12,7 @@
 | 任务图 | 父子任务、阻塞依赖、跨职责任务拆分、父任务汇总 | 规则拆分最多 5 个子任务，不是任意复杂项目的最佳规划保证。 |
 | 角色路由 | frontend/backend/qa 等通用角色、worker_type、priority、推理与环境策略 | 是路由元数据，不是多个人格的自治进程；不同角色目前共用 Codex 执行路径。 |
 | 实际执行 | Codex CLI、stdin 提示、JSONL 事件、PID/进程组、取消、符合新准入的 session resume | 需显式安装/授权 Codex；模型可用性、网络、额度由接入环境决定。无凭据 start/doctor/selftest/tour/KB 不受影响。 |
-| 执行配置 | 仅 Sol/Astra、精确 `low..ultra`、独立 standard/fast；显式 > env > route/default；角色默认 manager Astra/ultra/fast、executor/planner Sol/high/standard | 不 clamp；新 run 冻结七字段目标。旧历史缺不可变快照则拒绝 resume，不猜或回填。 |
+| 执行配置 | 仅 Sol/Astra、精确 `medium/high/xhigh/ultra`、独立 standard/fast；显式 > env > route/default；角色默认 manager Astra/ultra/fast、executor/planner Sol/high/standard | 不 clamp；新 run 冻结七字段目标。旧历史缺不可变快照则拒绝 resume，不猜或回填。 |
 | 本机能力准入 | 人工审查的私有 schema-2 manifest；只读 status 与显式非覆盖 prepare | 24 小时内且本机/CLI/catalog 精确匹配；本机 advertisement 不证明账户权限、额度或 served tier。 |
 | 项目隔离 | 显式注册项目名/角色/仓库、独立 worktree/分支、开发基线；空配置不猜目录 | 拒绝受保护基线、引擎源目录/数据目录/安装包目录；不是容器隔离，scope 不是独立权限围栏。 |
 | 状态事实 | task、run、event、evidence、admission、release 分离；等待显示 actor/next action/due/source | 动画、退出码、模型自述和 DONE 都不能单独证明任务完成或发布。 |

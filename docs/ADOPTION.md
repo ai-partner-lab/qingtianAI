@@ -17,7 +17,7 @@ qingtian selftest
 qingtian quickstart --open
 ```
 
-`doctor` 检查 Python、平台、策略资源、路径及可选工具是否存在，不验证 Codex 登录或模型额度。`selftest` 在自己的临时目录完成 8 项合成检查：空库、任务幂等、未验证证据不完成、已验证证据完成、manual 不领取任务、重开持久化、SQLite 完整性、看板投影。它不启动 HTTP 服务、不调用模型，也不替代浏览器或业务验收。
+`doctor` 检查 Python、平台、策略资源、路径及可选工具是否存在，不验证 Codex 登录或模型额度。`selftest` 在自己的临时目录完成 11 项合成检查：manager/executor/planner 三种角色默认、空库、任务幂等、未验证证据不完成、已验证证据完成、manual 不领取任务、重开持久化、SQLite 完整性、看板投影。它不启动 HTTP 服务、不调用模型，也不替代浏览器或业务验收。
 
 首次使用新的数据目录时，`quickstart` 启动空库与 `manual` 后台服务；复用目录则保留已有任务。它固定使用 manual，不接受 `--mode`。默认数据目录是 `~/.local/share/qingtian/engine`，控制台地址是 [本机 8766 端口](http://127.0.0.1:8766/)。关闭启动终端不会停止后台服务；停止用 `qingtian stop`。
 
@@ -141,7 +141,7 @@ intake 支持稳定幂等键；直接 `POST /api/tasks` 当前不转发幂等键
 
 ## 模型与推理配置
 
-新选择只接受 `gpt-5.6-sol` 与 `gpt-6-astra`。推理强度只接受 `low`、`medium`、`high`、`xhigh`、`max`、`ultra`，精确校验且不 clamp；速度是独立的 `standard` 或 `fast`。角色默认值为 manager Astra/ultra/fast，executor 与 planner Sol/high/standard。接入者仍须确认自己的账户实际可用。设置应在新实例启动前完成；已有服务不会因另一个 shell 改环境自动更新，也不要为改配置擅自重启他人的实例。
+新选择只接受 `gpt-5.6-sol` 与 `gpt-6-astra`。推理强度只接受 `medium`、`high`、`xhigh`、`ultra`，精确校验且不 clamp；速度是独立的 `standard` 或 `fast`。角色默认值为 manager Astra/ultra/fast，executor 与 planner Sol/high/standard。接入者仍须确认自己的账户实际可用。设置应在新实例启动前完成；已有服务不会因另一个 shell 改环境自动更新，也不要为改配置擅自重启他人的实例。
 
 ```sh
 export QINGTIAN_MODEL="gpt-6-astra"
@@ -149,15 +149,17 @@ export QINGTIAN_REASONING="xhigh"
 export QINGTIAN_SPEED="fast"
 ```
 
-这只是一个可选配置示例，**不验证模型/账户可用性、不调用模型、不产生执行授权**。`QINGTIAN_POLICY_PATH` 可指向你自己保存的完整策略 JSON；建议用绝对路径，并从随包 `qingtian_engine/resources/policy.json` 复制结构后审查。没有覆盖时读取包内策略。空路径、非法 JSON、缺失必需策略字段或非法模型/effort 不能作为默认配置成功运行。
+这只是一个可选配置示例，**不验证模型/账户可用性、不调用模型、不产生执行授权**。`QINGTIAN_POLICY_PATH` 可指向你自己保存的完整策略 JSON；建议用绝对路径，并从随包 `config/policy.example.json` 或 `qingtian_engine/resources/policy.json` 复制结构后审查。没有覆盖时读取包内策略。空路径、非法 JSON、缺失必需策略字段或非法模型/effort 不能作为默认配置成功运行。
 
 | 选择项 | 新任务/规划的优先级与边界 |
 |---|---|
 | model | 显式参数 → `QINGTIAN_MODEL` → 路由/角色默认；必须是两个精确 ID 之一。 |
-| reasoning | 显式参数 → `QINGTIAN_REASONING` → 路由/角色默认；六个值精确接受，不静默提高或降低。 |
+| reasoning | 显式参数 → `QINGTIAN_REASONING` → 路由/角色默认；四个值精确接受，不静默提高或降低。 |
 | speed | 显式参数 → `QINGTIAN_SPEED` → 路由/角色默认；与模型/推理独立选择。 |
 | 可选 Codex Planner | 使用同一模型/推理配置入口；仅 `QINGTIAN_INTAKE_PLANNER=codex` 启用后才调用模型，仍需独立读取范围授权。 |
 | 执行与续接 | 新 run 保存七个不可变目标字段：model、reasoning、speed、worker type、owner session、branch、worktree。运行中和已有记录不因新默认值改变。 |
+
+若 intake 拆成一个协调父任务和多个执行子任务，用户显式选择的 model/reasoning/speed 会作为同一不可变 tuple 原样传给父子任务；引擎不会因父任务的 `manager` 标签静默换成另一组参数。若要让不同子任务采用不同组合，应分别创建或明确更新任务并产生各自的准入记录。
 
 真实执行还要求 `QINGTIAN_CODEX_CAPABILITIES` 指向使用者人工审查的 schema-2 私有清单。缺失、过期、本机身份/CLI/目录来源失配或所选模型未列出时失败闭合。先用只读 `qingtian capabilities status` 核对；草稿准备、24 小时时限和人工启用步骤见 [Codex 本机能力清单](CODEX-CAPABILITIES.md)。该清单是本机 advertisement，不是账户权限、额度、实际 served tier 或执行成功证明。
 

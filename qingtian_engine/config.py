@@ -16,7 +16,12 @@ DEFAULT_PORT = 8766
 EXECUTION_MODEL = "gpt-5.6-sol"
 EXECUTION_REASONING = "high"
 EXECUTION_MODELS = frozenset({"gpt-5.6-sol", "gpt-6-astra"})
-EXECUTION_EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max", "ultra"})
+EXECUTION_EFFORT_ORDER = ("medium", "high", "xhigh", "ultra")
+EXECUTION_EFFORTS_BY_MODEL = {
+    "gpt-5.6-sol": frozenset(EXECUTION_EFFORT_ORDER),
+    "gpt-6-astra": frozenset(EXECUTION_EFFORT_ORDER),
+}
+EXECUTION_EFFORTS = frozenset().union(*EXECUTION_EFFORTS_BY_MODEL.values())
 EXECUTION_SPEEDS = frozenset({"standard", "fast"})
 
 
@@ -31,10 +36,21 @@ def default_data_dir() -> Path:
 
 
 def require_execution_model(model: str, reasoning: str) -> None:
-    if not isinstance(model, str) or not isinstance(reasoning, str) or model not in EXECUTION_MODELS or reasoning not in EXECUTION_EFFORTS:
+    if not isinstance(model, str) or model not in EXECUTION_MODELS:
         raise ValueError(
-            "MODEL_POLICY: choose explicit gpt-5.6-sol or gpt-6-astra and a supported "
-            "low/medium/high/xhigh/max/ultra effort; no alias, family-wide permission or fallback"
+            "MODEL_POLICY: choose explicit gpt-5.6-sol or gpt-6-astra; "
+            "models below the Sol floor, aliases and fallbacks are forbidden"
+        )
+    supported = EXECUTION_EFFORTS_BY_MODEL[model]
+    if not isinstance(reasoning, str) or reasoning not in supported:
+        raise ValueError(
+            "MODEL_POLICY: {} requires an explicitly supported reasoning effort: {}; "
+            "no clamp or fallback".format(
+                model,
+                "/".join(
+                    effort for effort in EXECUTION_EFFORT_ORDER if effort in supported
+                ),
+            )
         )
 
 

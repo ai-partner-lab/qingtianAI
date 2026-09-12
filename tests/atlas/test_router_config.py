@@ -26,10 +26,10 @@ class RouterAndPolicyTest(unittest.TestCase):
 
     def test_policy_preserves_effort_and_speed_independently_of_time(self) -> None:
         tz = ZoneInfo("Asia/Shanghai")
-        daytime = runtime_policy("low", datetime(2026, 7, 27, 9, tzinfo=tz))
+        daytime = runtime_policy("medium", datetime(2026, 7, 27, 9, tzinfo=tz))
         nighttime = runtime_policy("xhigh", datetime(2026, 7, 27, 21, tzinfo=tz))
         self.assertEqual("gpt-5.6-sol", daytime.model)
-        self.assertEqual("low", daytime.reasoning)
+        self.assertEqual("medium", daytime.reasoning)
         self.assertFalse(daytime.enable_fast_mode)
         self.assertEqual("xhigh", nighttime.reasoning)
         self.assertFalse(nighttime.enable_fast_mode)

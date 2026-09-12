@@ -61,7 +61,7 @@ qingtian capabilities prepare --output /private/location/draft.json
 ## 与执行参数的关系
 
 新执行只接受 `gpt-5.6-sol` 或 `gpt-6-astra`，推理强度只接受
-`low`、`medium`、`high`、`xhigh`、`max`、`ultra`，不做 clamp。速度是独立参数，
+`medium`、`high`、`xhigh`、`ultra`，不做 clamp。速度是独立参数，
 只接受 `standard` 或 `fast`。角色默认值为：
 
 | 角色 | 模型 | 推理 | 速度 |
