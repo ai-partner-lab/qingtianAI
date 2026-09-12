@@ -136,6 +136,15 @@ class ManagerEntryTests(unittest.TestCase):
         self.assertEqual(self.remote.count("thread/start"), 0)
         self.assertFalse(self.remote.threads["outside"]["isPinned"])
 
+    def test_legacy_manager_title_is_reused_and_renamed(self):
+        legacy = self.remote.add("legacy", name="擎天大管家")
+        self.remote.pages = {None: {"data": [legacy], "nextCursor": None}}
+        result = self.initialize()
+        self.assertEqual(result["thread_id"], "legacy")
+        self.assertEqual(self.remote.count("thread/start"), 0)
+        self.assertEqual(self.remote.threads["legacy"]["name"], entry.MANAGER_NAME)
+        self.assertTrue(result["metadata_ready"])
+
     def test_multiple_matches_require_explicit_selection(self):
         self.remote.add("a")
         self.remote.add("b")
@@ -243,6 +252,24 @@ class ManagerEntryTests(unittest.TestCase):
                              "repeat": {"data": [], "nextCursor": "repeat"}}
         self.assertEqual(self.initialize()["error_code"], "scan_incomplete")
         self.assertEqual(self.remote.count("thread/start"), 0)
+
+    def test_explicit_onboarding_can_create_once_after_incomplete_scan(self):
+        self.remote.pages = {None: {"data": [], "nextCursor": "repeat"},
+                             "repeat": {"data": [], "nextCursor": "repeat"}}
+        result = entry.initialize_entry(
+            self.data, self.workspace, client_factory=self.remote,
+            allow_incomplete_create=True,
+        )
+        self.assertEqual(result["thread_id"], "new-0")
+        self.assertEqual(self.remote.count("thread/start"), 1)
+        # The saved ID is authoritative on repeat; discovery and creation are
+        # not retried even though the backend listing remains incomplete.
+        repeated = entry.initialize_entry(
+            self.data, self.workspace, client_factory=self.remote,
+            allow_incomplete_create=True,
+        )
+        self.assertEqual(repeated["thread_id"], "new-0")
+        self.assertEqual(self.remote.count("thread/start"), 1)
 
     def test_lock_contention_never_contacts_remote(self):
         with entry._lock(self.data):
@@ -952,7 +979,11 @@ class OnboardingGuideTests(unittest.TestCase):
 
 class ProtocolTests(unittest.TestCase):
     def test_backend_version_comes_from_actual_initialize_response(self):
-        for agent, expected in (("qingtian_manager_entry/0.153.4 (Mac OS)", "0.153.4"),
+        for agent, expected in (("Codex Desktop/0.153.4 (Mac OS 26.6.2; arm64) dumb (qingtian_manager_entry; 0.6.0)", "0.153.4"),
+                                ("Codex Desktop/0.999.0 (Linux; x86_64) dumb (qingtian_manager_entry; 0.6.0)", "0.999.0"),
+                                ("Codex Desktop/0.153.4 (Mac OS) dumb (other_client; 0.6.0)", None),
+                                ("Codex Desktop/0.153.4-custom (Mac OS) dumb (qingtian_manager_entry; 0.6.0)", None),
+                                ("qingtian_manager_entry/0.153.4 (Mac OS)", "0.153.4"),
                                 ("qingtian_manager_entry/0.999.0 (Linux)", "0.999.0"),
                                 ("other/0.153.4", None),
                                 ("qingtian_manager_entry/0.153.4-custom", None),

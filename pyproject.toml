@@ -1,6 +1,6 @@
 [project]
 name = "qingtian-ai"
-version = "0.6.0rc2"
+version = "0.6.0"
 description = "Real local AI task engine: Codex workers, worktrees, receipts, recovery and project knowledge"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -10,7 +10,7 @@ license-files = ["LICENSE", "NOTICE"]
 authors = [{name = "Qingtian AI contributors"}]
 keywords = ["ai", "orchestration", "knowledge-base", "evidence", "verification"]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
   "Intended Audience :: Developers",
   "Operating System :: MacOS",

@@ -1,18 +1,18 @@
 # 版本迁移与边界
 
-## 0.6.0rc2 候选与追加 schema
+## 0.6.0 与追加 schema
 
-当前源码版本为 **0.6.0rc2** 候选，不是已发布稳定版。最终候选回归、独立安装与包审查仍待完成；真实 provider 和原生 Codex 首次接入/有效角色工作流没有因版本号变化而通过验收。下方 0.4 → 0.5 说明保留历史上下文，不能充当本次升级回执。
+当前源码版本为 **0.6.0**。稳定发布门禁覆盖独立安装、全量回归和发行物审查；真实 provider 仍由采用方接入。Codex 首次入口元数据与置顶在已识别宿主上已验证，但有效角色规则因宿主不可回读仍需人工验收。下方 0.4 → 0.5 说明保留历史上下文，不能充当本次升级回执。
 
-本候选的引擎数据库 schema 为 **10**。初始化旧引擎库时新增 `tasks.action_revision`，旧行初值 0 只是迁移基线，不是重建的历史动作次数；revision 迁移不回填旧事件，不重建或替换任务表。既有参考/只分析授权策略迁移仍适用，不会把这些记录变成实施授权。
+0.6.0 的引擎数据库 schema 为 **10**。初始化旧引擎库时新增 `tasks.action_revision`，旧行初值 0 只是迁移基线，不是重建的历史动作次数；revision 迁移不回填旧事件，不重建或替换任务表。既有参考/只分析授权策略迁移仍适用，不会把这些记录变成实施授权。
 
 数据库触发器在每次任务行 UPDATE 后单调推进 revision，包括同值写入。人工动作 `action_version` 基于任务 ID 与该 revision，客户端视为不透明令牌；摘要等其他字段更新也可使旧令牌失效。升级后先重新 GET，遇到 409 时再次展示最新要求并确认，不能重放升级前缓存的完成声明。省略版本的旧调用只保留原子操作兼容，不具备过时界面检测。详见 [人工动作合同](ENGINE-API.md#人工动作完成声明)。
 
-rc2 为新 HTTP dispatch 添加 revisioned admission request/receipt，并对实际创建的新 run 冻结七个不可变目标字段：model、reasoning、speed、worker type、owner session、branch、worktree。既有 run 列原样保留；旧历史若没有完整不可变快照，resume 失败闭合，不从任务字段、环境或当前默认猜测，不回填旧记录。intake/retry/auto/external-host ack 尚未统一到此接纳合同。详见 [配置与续接](ADOPTION.md#模型与推理配置)。
+0.6.0 为新 HTTP dispatch 添加 revisioned admission request/receipt，并对实际创建的新 run 冻结七个不可变目标字段：model、reasoning、speed、worker type、owner session、branch、worktree。既有 run 列原样保留；旧历史若没有完整不可变快照，resume 失败闭合，不从任务字段、环境或当前默认猜测，不回填旧记录。intake/retry/auto/external-host ack 尚未统一到此接纳合同。详见 [配置与续接](ADOPTION.md#模型与推理配置)。
 
 模型迁移不做宽松兼容：新选择只允许 Sol/Astra、`medium/high/xhigh/ultra` effort 和独立 standard/fast，且不 clamp。默认值只作用于新选择，不改正在执行或历史参数。真实执行还要求使用者在源码/数据/发布目录之外保存人工审查、最多 24 小时有效的 schema-2 capability manifest；它含本机敏感路径/指纹，不迁入公库或发布包。[准备与启用](CODEX-CAPABILITIES.md)
 
-rc2 的 operations、admission 与 release 表/trigger 是追加结构，不重写既有 task/run/event/evidence 行。运维更正保留 native baseline 和旧/新值，作为补充投影而非覆盖原列；release batch/receipt 只登记声明式事实，不部署，也不从历史 DONE 合成发布记录。旧事实缺少可靠来源或当前 basis 时保持未知/stale。
+0.6.0 的 operations、admission 与 release 表/trigger 是追加结构，不重写既有 task/run/event/evidence 行。运维更正保留 native baseline 和旧/新值，作为补充投影而非覆盖原列；release batch/receipt 只登记声明式事实，不部署，也不从历史 DONE 合成发布记录。旧事实缺少可靠来源或当前 basis 时保持未知/stale。
 
 接入前安排一致性备份，并先用副本或全新私有目录验证；不要直接操作正在工作的控制台、Worker 或旧任务。版本迁移会写入目标库，因此执行前须确认实例归属和停机授权。没有本环境的实际迁移/恢复回执，不声称无损回退；回退应使用相应旧版本与升级前一致性备份，不让旧二进制直接写 schema 10 库。
 

@@ -1,7 +1,7 @@
 # Qingtian manager entry
 
 The open-source engine can create or reuse a real Codex thread named
-`擎天大管家`, set its name, request persisted pinning and read the result back.
+`擎天大管家入口`, set its name, request persisted pinning and read the result back.
 It does not start a model turn, resume old conversations, dispatch tasks or
 modify Codex's database directly. Pinning requires a subsequent `thread/read`
 with `isPinned: true`, or verified membership of an identified backend's genuine
@@ -29,10 +29,12 @@ dashboard-only invocations and cannot be combined with `--manager-entry`.
 `tour`, `selftest`, ordinary `start`, and HTTP GET requests never initialize an
 entry. Existing task and business states are unchanged by onboarding.
 
-`manager-entry init` can create a missing entry only when discovery can safely
-establish absence. The section-compatible CLI version below has a no-turn
-visibility gap, so an empty scan blocks creation on that backend. `sync` only reuses a matching
-entry or verifies the existing binding; it never creates a replacement.
+`manager-entry init` is the dedicated, explicit first-use creation action. It may
+create exactly one entry after writing a durable creation intent, including on
+the identified section-compatible CLI version whose empty no-turn listing is
+incomplete. A lost response never causes a blind retry. Read-only inspection,
+ordinary library calls and automatic recovery remain fail-closed. `sync` only
+reuses a matching entry or verifies the existing binding; it never creates a replacement.
 `status` and `guide` only read local state and validate the requested scope; they
 do not create directories. `guide` also emits one-time setup steps, not commands
 to execute automatically. `instructions` exports the suggested role rules without
@@ -43,12 +45,13 @@ Init/sync exit two while
 role setup or other acceptance remains unverified; metadata success alone does
 not yield a successful complete-onboarding exit code.
 
-**CLI 0.153.4 first-time limitation:** an empty discovery result returns
-`scan_incomplete` and does not create a thread, because zero-turn unsectioned
-threads can be hidden from its lists. This is not fully automatic onboarding.
-After selecting and checking an existing thread in the same workspace, explicitly
-bind it with `qingtian manager-entry sync --workspace /path/to/workspace --data-dir /path/to/engine --thread-id YOUR_EXISTING_THREAD_ID`.
-Do not create duplicates or discard a pending binding merely to bypass this guard.
+**CLI 0.153.4 first-time boundary:** zero-turn unsectioned threads can be hidden
+from its lists, so `inspect` and ordinary discovery report `scan_incomplete`.
+Only an explicit `manager-entry init` (or `quickstart --manager-entry`) may cross
+that empty-list boundary once, after journaling creation intent. Reuse the same
+data directory thereafter. If an existing task is selected instead, inspect it
+and bind it with `sync --thread-id`. Never delete a pending binding or switch data
+directories merely to create another entry.
 
 ### First-user journey without bypassing discovery
 
@@ -63,16 +66,12 @@ default, credentials or socket discovery is added by the guide.
 4. Only after checking the ID and approving the metadata changes, run the displayed `sync --thread-id` command. Sync re-reads the ID, validates the binding scope and may rename/pin the selected task. The inspection does not grant permission or replace sync's checks. Exit two remains expected while role/workflow acceptance is incomplete.
 5. Export `manager-entry instructions`, explicitly review/merge the proposed role rules through your client's supported configuration, and obtain separate permission for any ensuing model turn. Keep actual role, desktop and fresh coordination acceptance evidence separate.
 
-If no suitable task exists, first reconcile existing tasks with their owner.
-Only after explicit approval, use your client's supported creation flow for
-exactly one dedicated task in this workspace and retain its returned ID, then
-follow steps 3-5. If the client cannot create an idle task without starting a
-model turn, stop for that additional permission. This initializer does not start
-that account-level journey. There is deliberately no force-create flag: an empty
-or incomplete scan is not proof of absence, and a guide is not authorization to
-bypass duplicate protection. Never discard a pending receipt or switch data
-directories merely to retry creation. `init` retains its existing guarded
-creation behavior only where discovery can establish absence.
+If no suitable task exists and you approve creating one, run the displayed
+`manager-entry init` command (or `quickstart --manager-entry`) once with the
+intended persistent data directory. It creates an idle task without starting a
+model turn. There is deliberately no force-create flag: the dedicated command
+records intent before creation and refuses to retry after an uncertain response.
+Never discard a pending receipt or switch data directories merely to retry.
 
 `inspect` without an ID reads the existing scoped binding, or performs the same
 bounded, paginated discovery as initialization. It never authorizes creation,
@@ -147,11 +146,13 @@ some accept the metadata request but ignore unknown pin fields. Missing pin
 readback is `pin_unverified`, not a successful pin. Moving into a named custom
 section is not treated as native pinning.
 
-An isolated check of the locally installed CLI confirmed real creation, naming
-and reuse across separate app-server connections. That version ignored
-`isPinned` and rejected the resulting empty patch with RPC code `-32600`;
-the feature therefore reported `partial` / `pin_unverified`. This is not evidence
-of successful pinning on that version, and no live desktop task was modified.
+An earlier isolated check confirmed creation and naming but lacked native pin
+evidence. The final 0.6.0 path was then exercised against Codex Desktop 0.153.4:
+the connected server identity was read from the real handshake, the same thread
+was moved into the protected built-in pinned section, and `thread/read` returned
+that membership. The result was `pinned=true` with
+`pin_evidence_source=builtin_section`. This verifies metadata on that host only;
+effective role rules still cannot be read back and remain `role_unverified`.
 
 ### Version-scoped native section compatibility
 
@@ -184,16 +185,17 @@ by that static evidence alone. This is **not** evidence that omission defaults t
 the unsectioned view. The original combined fixture failure remains a failure;
 the narrower persisted section-membership evidence does not overwrite it.
 
-Discovery therefore scans the ordinary view, explicit null view, and every
+Discovery scans the ordinary view, explicit null view, and every
 registered section (including the proven built-in), follows pagination with a
 shared safety budget and deduplicates exact IDs before selecting a match. A
 catalog/listing failure or ambiguity cannot create a replacement. On this
 identified backend, even an exhausted empty scan cannot establish absence of an
-invisible unsectioned zero-turn entry, so it reports `scan_incomplete` without
-creating. Use an explicitly selected existing ID to reconcile that case; do not
-delete binding/creation-intent records or create a duplicate to bypass the guard.
-Fully automatic first-time creation and complete ordinary-list discoverability
-on this backend remain unaccepted.
+invisible unsectioned zero-turn entry, so read-only discovery reports
+`scan_incomplete`. The explicit first-use action is separately authorized to
+create once because it journals intent before the request and then binds that
+returned ID. It does not make ordinary-list discoverability complete. Use an
+explicitly selected existing ID to reconcile known entries; do not delete
+binding/creation-intent records or create a duplicate to bypass the guard.
 
 ## Binding and recovery
 
@@ -227,8 +229,9 @@ qingtian manager-entry sync --workspace /path/to/workspace --data-dir /path/to/e
 ```
 
 The selected thread must belong to the same workspace. This command can rename
-it to `擎天大管家` and pin it; it never resumes it. Deleted or unreadable bound
-threads, incomplete listings, corrupt state and ambiguous matches do not cause
+it to `擎天大管家入口` and pin it; it never resumes it. A binding created by
+0.6.0rc2 under the legacy `擎天大管家` title is reused and renamed, not duplicated.
+Deleted or unreadable bound threads, incomplete listings, corrupt state and ambiguous matches do not cause
 automatic replacements. Resolve the binding explicitly. Existing Codex login
 and access errors are reported without copying server messages or credentials.
 

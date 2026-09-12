@@ -47,7 +47,7 @@
 | 项目映射 | 项目注册表与 runner 的配置/集成测试 | allowlist、基线、scope 越界、引擎目录阻止、配置失败 | 项目功能或生产部署已通过。 |
 | 报告 | `test_reporting.py` | 24 小时窗口、暂停/仅规划分组、证据展示 | 报表上的 DONE 自动代表产品验收。 |
 | 真 CLI 端到端 | 上述接口可驱动；需新环境独立运行并保存回执 | 创建新任务，实际 Codex 修改一次性样例仓库，收集测试与证据，验证状态闭环 | 使用 fake process 或 Demo 推进代替真实 E2E。 |
-| 浏览器 E2E | `test_dashboard_journey.py --browser-e2e` 与独立 `current-engine-browser` CI job | 当前 Handler/service/SQLite 的真实隔离浏览器旅程、普通动作冲突、SSE 刷新/失败恢复与移动视口 | 静态/DOM 单测、旧 laboratory job 或 CI 配置存在等于本候选 browser 已通过；原生目的地未打开。 |
+| 浏览器 E2E | `test_dashboard_journey.py --browser-e2e` 与独立 `current-engine-browser` CI job | 当前 Handler/service/SQLite 的真实隔离浏览器旅程、普通动作冲突、SSE 刷新/失败恢复与移动视口 | 静态/DOM 单测、旧 laboratory job 或 CI 配置存在等于本版 browser 已通过；原生目的地未打开。 |
 | 视觉门禁 | **没有内建像素基线比较服务** | 接入方提供截图尺寸、字体、基线、阈值与人工复核记录 | 能力目录中的“视觉”已经自动执行。 |
 | 性能/安全 | 基础负例和本机运行限制 | 并发请求、恢复时间、资源上限、秘密回显、附件异常 | 生产渗透、容量/SLO、灾备演练已经完成。 |
 

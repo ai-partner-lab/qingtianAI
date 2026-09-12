@@ -3,12 +3,12 @@
 Only maintainers should publish a release. Run the release from a clean checkout whose
 complete history has been reviewed for private data.
 
-The current source version is **0.6.0rc2**, an unpublished prerelease candidate,
-not stable 0.6.0. Its final combined-source regression and artifact acceptance
-remain pending. Actual provider execution and native Codex first-use/effective
-role workflow acceptance are separate unfinished gates, not implied by synthetic
-fixtures, valid configuration or the version string. Keep prior 0.5.0 receipts
-and the historical video unchanged; do not relabel them as rc2 passes.
+The current source version is **0.6.0**. A stable tag is created only after this
+checklist passes against the exact commit and its public CI is green. Actual
+provider execution remains adopter-owned, and effective Codex role workflow
+acceptance is separate from the verified first-use metadata/pin path; neither is
+implied by fixtures, configuration or the version string. Keep prior 0.5.0
+receipts and the historical video unchanged; do not relabel them as 0.6.0 passes.
 
 1. Confirm the version in `pyproject.toml`, package modules, and `CHANGELOG.md` agrees.
 2. Run `python -m unittest discover -s tests -v` on all supported Python versions.
@@ -95,12 +95,12 @@ The optional PDF extra requires `pypdf>=6.18.0,<7`; no PDF dependency is added t
 the core runtime. The upstream [CID width advisory](https://github.com/py-pdf/pypdf/security/advisories/GHSA-fwg2-594c-jp42)
 and [whitespace parser advisory](https://github.com/py-pdf/pypdf/security/advisories/GHSA-fc8x-2rww-xw9m)
 identify versions below 6.15.0 as affected; the higher floor uses the version
-actually checked for this candidate. Build/dev setuptools requires `>=78.1.1`,
+actually checked for this release. Build/dev setuptools requires `>=78.1.1`,
 excluding the older [PackageIndex traversal range](https://github.com/pypa/setuptools/security/advisories/GHSA-5rjg-fvgr-3xxf).
 These are bounded minimum-version decisions, not an exploit test, unrestricted
 PDF trust policy or complete transitive dependency/security certification.
 
-## Candidate freeze and evidence
+## Release freeze and evidence
 
 Before the final regression, freeze all owners' source files together and record a
 reviewed commit (or pre-commit snapshot identity), every allowlisted file's SHA-256,
@@ -130,7 +130,7 @@ missing dependencies and cleanup failures as failures, validates receipt hashes,
 and always attempts to upload the dedicated receipt directory (including raw
 HTTP/SSE, screenshots, summary, ledger and logs). A hard runner termination cannot
 guarantee receipt generation or upload. Retain the separately named legacy job;
-neither job's configured existence is a claim that the current candidate passed.
+neither job's configured existence is a claim that the current release passed.
 
 After source freeze, the release evidence must include fresh full tests, selftest,
 current-engine browser results, wheel/sdist/bundle contents and hashes, a clean
@@ -141,7 +141,7 @@ applicable gate is blocked or requires a maintainer decision.
 
 The preserved showcase video is historical evidence from an older real-engine run
 using synthetic tasks. Keep its media bytes and disclosures unchanged. It does not
-claim that the rc2 candidate's browser journey, paid models, capability manifest or
+claim that the 0.6.0 browser journey, paid models, capability manifest or
 native manager workflow has been newly verified.
 
 Only after maintainers approve that evidence: commit the exact reviewed source,

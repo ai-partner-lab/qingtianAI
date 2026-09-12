@@ -85,7 +85,9 @@ def main(argv=None) -> int:
             parser.error("--manager-entry and --skip-manager-entry conflict")
         if options.manager_entry:
             from .manager_entry import initialize_from_environment
-            entry = initialize_from_environment(data, options.workspace)
+            entry = initialize_from_environment(
+                data, options.workspace, create_if_needed=True
+            )
             print(json.dumps({"manager_entry": entry}, ensure_ascii=False), flush=True)
         return start_server(data, options.port, False, options.open,
                             mode="manual", workspace=options.workspace.expanduser().resolve())

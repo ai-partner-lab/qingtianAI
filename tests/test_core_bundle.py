@@ -83,6 +83,11 @@ class BundleTest(unittest.TestCase):
             verified = verify_bundle(archive)
             self.assertEqual(built["files"], 3)
             self.assertEqual(verified["files"], 3)
+            with tarfile.open(archive, "r:gz") as handle:
+                self.assertEqual(
+                    {Path(item.name).parts[0] for item in handle.getmembers()},
+                    {"qingtianAI"},
+                )
             second_archive = base / "kit-second.tgz"
             second = build_bundle(source, second_archive)
             self.assertEqual(built["sha256"], second["sha256"])
@@ -272,7 +277,7 @@ class BundleTest(unittest.TestCase):
             build_bundle(source, archive_path)
             verify_bundle(archive_path)
             with tarfile.open(archive_path, "r:gz") as archive:
-                member = archive.getmember(f"{source.name}/qingtian")
+                member = archive.getmember("qingtianAI/qingtian")
                 self.assertEqual(member.mode & 0o777, 0o755)
             if os.name != "posix":
                 return
@@ -280,7 +285,7 @@ class BundleTest(unittest.TestCase):
             extracted.mkdir()
             with tarfile.open(archive_path, "r:gz") as archive:
                 archive.extractall(extracted, filter="data")
-            restored = extracted / source.name / "qingtian"
+            restored = extracted / "qingtianAI" / "qingtian"
             self.assertTrue(os.access(restored, os.X_OK))
             completed = subprocess.run([str(restored)], check=False)
             self.assertEqual(completed.returncode, 0)

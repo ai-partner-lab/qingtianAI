@@ -17,4 +17,4 @@ __all__ = [
     "StorageContractError",
     "TransitionError",
 ]
-__version__ = "0.6.0rc2"
+__version__ = "0.6.0"

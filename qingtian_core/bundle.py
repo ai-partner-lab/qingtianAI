@@ -45,6 +45,7 @@ FORBIDDEN_DATA_PARTS = {
     "venv",
 }
 ALLOWLIST_NAME = "release-allowlist.json"
+BUNDLE_ROOT_NAME = "qingtianAI"
 EXECUTABLE_PATHS = {"qingtian", "qingtian-kb", "scripts/bootstrap.sh", "scripts/smoke.py"}
 MAX_ARCHIVE_MEMBERS = 4096
 MAX_ARCHIVE_COMPRESSED_BYTES = 64 * 1024 * 1024
@@ -278,7 +279,10 @@ def build_bundle(root: str | Path, output: str | Path) -> dict[str, object]:
         raise ValueError(f"release scan failed: {json.dumps(findings, ensure_ascii=False)}")
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="qingtian-release-") as temp_name:
-        staging = Path(temp_name) / root_path.name
+        # The public archive must not reveal a maintainer's checkout/worktree
+        # directory or produce different bytes merely because it was built from
+        # a differently named clone.
+        staging = Path(temp_name) / BUNDLE_ROOT_NAME
         staging.mkdir()
         manifest_lines = []
         copied = 0

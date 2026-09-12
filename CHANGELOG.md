@@ -3,13 +3,23 @@
 All notable changes to Qingtian AI are documented here. The project follows semantic
 versioning once public releases are tagged.
 
-## Unreleased — 0.6.0rc2 candidate
+## 0.6.0 - 2026-09-12
 
-This is a prerelease source candidate, not a published stable release or a claim
-that every integration is ready. Final whole-candidate regression, clean installs
-and artifact review remain release gates; older 0.5.0 results are not relabeled.
-Real provider execution and native Codex first-use/role workflow acceptance remain
-unverified and must be reported separately from credential-free fixture results.
+This is the first stable release of the extracted local control-plane core, not a
+claim that every adopter-owned integration is configured. Real provider execution
+still needs the adopter's account, permissions and quota. Codex manager-entry
+metadata creation and native pin readback are supported on the tested host, while
+effective role-rule readback remains unavailable and is reported separately as
+`role_unverified` rather than promoted to workflow readiness.
+
+- Add a receipted, isolated user installer and guarded uninstaller. Installation
+  runs the credential-free selftest; uninstall preserves task data by default and
+  refuses unreceipted or broad targets.
+- Recognize the real Codex Desktop handshake, validate the connected backend, and
+  verify native pinned-section membership on Codex 0.153.4. Explicit first-use
+  onboarding may create exactly one journaled manager entry when that backend's
+  zero-turn list is incomplete; read-only discovery and automatic recovery remain
+  fail-closed, and no command starts a model turn.
 
 - Normalize every sdist tar owner/PAX header and gzip header through the standard
   build hook; preserve source bytes and executable modes, and check actual wheel,

@@ -23,7 +23,8 @@ import time
 from . import __version__
 
 
-MANAGER_NAME = "\u64ce\u5929\u5927\u7ba1\u5bb6"
+MANAGER_NAME = "\u64ce\u5929\u5927\u7ba1\u5bb6\u5165\u53e3"
+LEGACY_MANAGER_NAMES = frozenset({"\u64ce\u5929\u5927\u7ba1\u5bb6"})
 MANAGER_INSTRUCTIONS = (
     "You are Qingtian's manager entry. Coordinate only the user's newly authorized work. "
     "Keep user communication responsive, delegate substantial execution to suitable "
@@ -57,7 +58,7 @@ MESSAGES = {
     "ambiguous": "Multiple matching manager threads exist. Select the intended one with --thread-id.",
     "creation_uncertain": "An earlier create may have succeeded. Reconcile its thread ID with --thread-id; automatic creation is paused.",
     "not_found": "No active manager entry was found. Run manager-entry init to create one.",
-    "scan_incomplete": "Thread discovery could not establish a complete result. No thread was created; reconcile an existing ID explicitly.",
+    "scan_incomplete": "Thread discovery could not establish a complete result. Read-only flows will not create; use an existing ID or the explicit first-use init action.",
     "io_error": "Local manager-entry state or process I/O is unavailable.",
     "invalid_config": "Invalid manager-entry configuration. Check transport, socket and timeout.",
     "cleanup_unavailable": "This platform cannot provide bounded transport pipe/process cleanup.",
@@ -71,9 +72,20 @@ def _now():
 def _backend_version(result):
     """Use the connected server's handshake, never the local proxy executable."""
     agent = result.get("userAgent")
-    if not isinstance(agent, str) or not agent.startswith("qingtian_manager_entry/"):
+    if not isinstance(agent, str):
         return None
-    version = agent.partition("/")[2].partition(" ")[0]
+    # Current Codex Desktop identifies the serving backend first and echoes the
+    # client identity at the end, for example:
+    # ``Codex Desktop/0.153.4 (...) dumb (qingtian_manager_entry; 0.6.0)``.
+    # Older isolated protocol fixtures used the client-first form.  Accept only
+    # these two bounded identities; arbitrary launcher text must not opt into a
+    # version-scoped metadata mutation.
+    if agent.startswith("Codex Desktop/") and "(qingtian_manager_entry; " in agent:
+        version = agent.partition("/")[2].partition(" ")[0]
+    elif agent.startswith("qingtian_manager_entry/"):
+        version = agent.partition("/")[2].partition(" ")[0]
+    else:
+        return None
     parts = version.split(".")
     return version if len(version) <= 24 and len(parts) == 3 and all(
         part.isascii() and part.isdigit() for part in parts) else None
@@ -492,7 +504,7 @@ def _onboarding(state, data_dir, workspace, command, *, selected_id=None, inspec
         step("select_existing", "Choose one existing manager task",
              "In your Codex client, select the intended task in this workspace and obtain its exact ID. Resolve multiple candidates explicitly. An empty or incomplete CLI list does not prove that no task exists.")
         step("dedicated_entry", "If no suitable task exists, obtain explicit creation approval",
-             "First reconcile existing tasks with their owner. Only after explicit approval, use your client's supported flow to create exactly one dedicated task in this workspace and retain its returned ID. If that flow starts a model turn, obtain separate permission first. This guide neither authorizes nor performs creation; never use it to bypass incomplete discovery.")
+             "First reconcile existing tasks with their owner. Only after explicit approval, run manager-entry init once with this workspace and persistent data directory. It journals intent before creating one idle task and never starts a model turn. This guide neither authorizes nor performs creation; never discard a pending receipt or switch data directories to retry.")
     thread_id = thread_id or "YOUR_EXISTING_THREAD_ID"
     step("inspect", "Check the selected ID without changing it",
          "Replace the ID placeholder with your explicit selection. Reads thread identity and workspace without binding, renaming, pinning or starting/resuming a turn. Continue only when inspection.can_bind is true.",
@@ -633,7 +645,7 @@ def _find_threads(client, workspace):
                 raise EntryError("scan_incomplete", method="thread/list")
             pages += 1
             result = client.call("thread/list", {
-                "cwd": str(workspace), "searchTerm": MANAGER_NAME,
+                "cwd": str(workspace), "searchTerm": "\u64ce\u5929\u5927\u7ba1\u5bb6",
                 "archived": False, "limit": 100, "cursor": cursor,
                 "sourceKinds": ["cli", "vscode", "exec", "appServer", "unknown"],
                 "modelProviders": [], "useStateDbOnly": True, **view,
@@ -643,7 +655,7 @@ def _find_threads(client, workspace):
             for candidate in result["data"]:
                 if not isinstance(candidate, dict):
                     raise EntryError("protocol_error", method="thread/list")
-                if candidate.get("name") == MANAGER_NAME:
+                if candidate.get("name") in {MANAGER_NAME, *LEGACY_MANAGER_NAMES}:
                     # A backend may ignore filters: enforce exact local scope too.
                     if (isinstance(candidate.get("cwd"), str)
                             and Path(candidate["cwd"]).resolve() == workspace
@@ -665,7 +677,8 @@ def _find_threads(client, workspace):
 
 
 def initialize_entry(data_dir, workspace, *, command=None, timeout=15,
-                     thread_id=None, allow_create=True, client_factory=AppServerClient):
+                     thread_id=None, allow_create=True, allow_incomplete_create=False,
+                     client_factory=AppServerClient):
     """Create/reuse/pin only this binding; never resume or dispatch any turn."""
     workspace = Path(workspace).expanduser().resolve()
     command = command or [os.environ.get("QINGTIAN_CODEX_BIN", "codex"), "app-server"]
@@ -692,7 +705,19 @@ def initialize_entry(data_dir, workspace, *, command=None, timeout=15,
                             "threadId": bound_id, "includeTurns": False,
                         }), workspace, bound_id)
                     else:
-                        matches = _find_threads(client, workspace)
+                        try:
+                            matches = _find_threads(client, workspace)
+                        except EntryError as exc:
+                            # Some identified Codex versions cannot list a fresh
+                            # zero-turn unsectioned task.  A dedicated explicit
+                            # onboarding action may still create exactly one task;
+                            # the durable creation intent prevents automatic retry
+                            # after a lost response.  Read-only inspect/sync and
+                            # ordinary library callers remain fail-closed.
+                            if not (allow_create and allow_incomplete_create
+                                    and exc.code == "scan_incomplete"):
+                                raise
+                            matches = []
                         if len(matches) > 1:
                             state["candidate_ids"] = [item["id"] for item in matches]
                             raise EntryError("ambiguous")
@@ -818,9 +843,12 @@ def configured_command(*, transport=None, socket=None, codex_bin=None):
     return command
 
 
-def initialize_from_environment(data_dir, workspace):
+def initialize_from_environment(data_dir, workspace, *, create_if_needed=False):
     try:
-        return initialize_entry(data_dir, workspace, command=configured_command())
+        return initialize_entry(
+            data_dir, workspace, command=configured_command(),
+            allow_incomplete_create=create_if_needed,
+        )
     except EntryError as exc:
         return _record_configuration_error(data_dir, exc)
 
@@ -861,6 +889,7 @@ def main(argv=None):
                 args.data_dir.expanduser().resolve(), args.workspace,
                 command=configured_command(transport=args.transport, socket=args.socket, codex_bin=args.codex_bin),
                 timeout=args.timeout, thread_id=args.thread_id, allow_create=args.action == "init",
+                allow_incomplete_create=args.action == "init",
             )
         except EntryError as exc:
             result = _record_configuration_error(args.data_dir.expanduser().resolve(), exc)

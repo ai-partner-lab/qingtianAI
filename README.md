@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/ai-partner-lab/qingtianAI/actions/workflows/ci.yml/badge.svg)](https://github.com/ai-partner-lab/qingtianAI/actions/workflows/ci.yml) · [Apache-2.0](LICENSE) · Python 3.11+ · macOS / Linux
 
-**当前源码候选：0.6.0rc2，尚未正式发布。** 最终候选全量回归、干净安装与包审查仍是发布门槛；真实 provider 执行与原生 Codex 首次接入/有效角色工作流未验收，不能把合成测试通过理解为全部自动就绪。
+**当前稳定版：0.6.0。** 核心引擎、发行物、一键安装/卸载和本机 Codex 入口元数据接入已经通过独立回归。真实 provider 仍由采用方提供账户、权限与额度；Codex 宿主暂不提供有效角色规则的可靠回读，因此入口即使创建并置顶，`workflow_ready` 仍会诚实保持 `false / role_unverified`，不能把元数据成功理解为全部自动就绪。
 
-0.5 从实际运行的本地引擎重新提取，默认入口不再是早期演示。该历史版本和演示录像的证据不自动认证当前候选。
+0.5 从实际运行的本地引擎重新提取，默认入口不再是早期演示。历史版本和演示录像的证据不自动认证 0.6.0；本版门禁以当前提交和发布页回执为准。
 
 ## 文档入口（真实引擎）
 
@@ -34,7 +34,27 @@
 
 [可编辑 Excalidraw](docs/diagrams/engine-overview.excalidraw) · [架构](docs/ENGINE-ARCHITECTURE.md) · [能力与测试角色](docs/ENGINE-CAPABILITIES.md) · [HTTP/API](docs/ENGINE-API.md)
 
-## 三分钟启动
+## 一条命令安装并启动
+
+Python 3.11+（建议 3.12+）、macOS 或 Linux：
+
+```bash
+git clone https://github.com/ai-partner-lab/qingtianAI.git
+cd qingtianAI
+python3 scripts/install.py --start --manager-entry --workspace "$PWD" --open
+```
+
+安装器创建用户私有虚拟环境，安装三个 CLI，执行无凭据自检，再以空任务库启动本地控制台；`--manager-entry` 是创建或复用并置顶“擎天大管家入口”的明确授权。它不会启动模型轮次、恢复旧任务、导入旧电脑台账或派发代码。Codex 0.153.4 已验证入口创建、命名和内建置顶分区回读；由于宿主不提供角色规则回读，仍需按页面步骤人工接入角色并单独验收。
+
+卸载只移除安装回执中登记的运行时和命令，默认保留任务数据：
+
+```bash
+python3 scripts/uninstall.py
+```
+
+只有明确传入 `--purge-data --yes --data-dir ...` 且目录含有效擎天数据库时才会清理数据。安装/卸载不会覆盖已有同名命令或无回执目录。
+
+## 三分钟手动启动
 
 Python 3.11+（建议 3.12+）、macOS 或 Linux。默认启动不需要 npm、Docker、模型凭据或 Obsidian。
 
@@ -51,11 +71,11 @@ qingtian quickstart --open
 
 打开 [本地控制台](http://127.0.0.1:8766/)。首次使用新数据目录时是**空任务库 + manual**；重启会保留该目录已有任务，不导入旧台账，不自动启动 Worker。点击“能力与上手”逐步查看接入方法。
 
-`quickstart` 默认只启动控制台，不创建 Codex 入口。确需尝试创建或复用真实 Codex“擎天大管家”入口时显式加 `--manager-entry`；该动作不启动模型轮次或恢复旧任务。`--skip-manager-entry` 为旧调用兼容保留，不能与 opt-in 同时使用。
+`quickstart` 默认只启动控制台，不创建 Codex 入口。显式加 `--manager-entry` 代表允许当前数据目录创建或复用一个真实 Codex“擎天大管家入口”；创建意图会先持久化，响应丢失时不会盲目重建。该动作不启动模型轮次或恢复旧任务。首次接入和后续恢复必须沿用同一数据目录；`--skip-manager-entry` 为旧调用兼容保留，不能与 opt-in 同时使用。
 
 入口的 `metadata_ready` 只表示当前 scope 匹配的名称/置顶元数据回读；`role_configuration` 中新建时的规则提交记录不等于有效角色已核验，复用或显式绑定且没有本地创建回执时角色来源为 `unknown`。当前 `workflow_ready=false`，即使命名和置顶元数据成功，整体仍为 `partial / role_unverified`。用 `qingtian manager-entry instructions` 查看人工接入规则；`status`/`instructions` 是只读命令，退出 0 不代表工作流就绪，`init`/`sync` 在当前未完成角色验收时退出 2。[入口使用与兼容说明](docs/MANAGER-ENTRY.md)
 
-在已验证历史检查点中，自动置顶以 `thread/read` 回读 `isPinned=true` 为成功依据。先前 codex-cli 0.153.4 的隔离冒烟因缺少该字段返回 `partial / pin_unverified`，仅代表该旧检查点，不代表所有版本永久不支持置顶。当前适配器的回读与兼容边界以[入口说明](docs/MANAGER-ENTRY.md)为准。公共任务详情已有结构化会话导航与 ID 复制；隔离浏览器只验证生成链接，未打开真实原生 Codex 目的地。桌面侧栏可见、置顶和有效角色协作工作流仍需独立端到端验收。
+自动置顶优先以 `thread/read` 回读 `isPinned=true` 为成功依据。对已识别的 Codex 0.153.4，0.6.0 还会核验服务端握手与受保护内建置顶分区，再移动并回读同一线程；本机真实接入已经得到 `pinned=true`、`pin_evidence_source=builtin_section`。未知版本或缺失身份仍保守返回未核验。公共任务详情已有结构化会话导航与 ID 复制；有效角色规则和一次新的真实协调旅程仍需独立验收。[入口说明](docs/MANAGER-ENTRY.md)
 
 - 默认数据目录是 `~/.local/share/qingtian/engine`，不写源码或安装目录；支持 `QINGTIAN_ENGINE_HOME` 或全局 `--data-dir`。
 - `qingtian stop` 停止该数据目录的控制台，不等于取消已派发的独立 Worker。

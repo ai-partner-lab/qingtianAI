@@ -34,7 +34,7 @@ curl --fail http://127.0.0.1:8767/api/health
 
 ## Codex 大管家入口
 
-`quickstart` 默认只启动 manual 控制台，不联系 Codex。显式添加 `--manager-entry` 后，才会在启动控制台前尝试创建或复用名为“擎天大管家”的真实 Codex 入口。这个过程不启动模型轮次、不恢复旧会话，也不派发项目任务；失败会输出结构化状态，控制台仍可启动。
+`quickstart` 默认只启动 manual 控制台，不联系 Codex。显式添加 `--manager-entry` 后，才会在启动控制台前尝试创建或复用名为“擎天大管家入口”的真实 Codex 入口。这个过程不启动模型轮次、不恢复旧会话，也不派发项目任务；失败会输出结构化状态，控制台仍可启动。
 
 `--skip-manager-entry` 为既有调用兼容保留，不能与 `--manager-entry` 同时使用。以下命令沿用上文的私有数据目录；`manager-entry status` 只读本地上次同步快照并核对当前 scope，`instructions` 只打印建议的角色规则，两者都不联系 Codex：
 
@@ -54,7 +54,7 @@ qingtian manager-entry instructions
 
 即使命名和置顶元数据成功，整体仍是 `partial / role_unverified`；`init`/`sync` 因角色或其他验收未完成而退出 2。只读 `status`/`instructions` 退出 0，不代表初始化成功。旧 `ready` 快照也不能自动成为角色已验收的证明。
 
-已验证历史检查点的自动置顶以 `thread/read` 回读 `isPinned=true` 为依据。先前 codex-cli 0.153.4 的隔离冒烟未提供该字段，得到 `partial / pin_unverified`、`pinned=null`；只代表旧检查点，不表示所有版本永久不支持置顶。内建分区兼容正在单独处理，本文不将其记为独立复验通过，旧候选也不包含后续改动。真实桌面侧栏可见、置顶和有效角色协作工作流仍需端到端验收；Windows 原生 transport 清理路径也尚未验收。
+自动置顶优先以 `thread/read` 回读 `isPinned=true` 为依据。0.6.0 已在本机 Codex Desktop 0.153.4 真实验证服务端握手、入口创建/命名、受保护内建置顶分区移动与回读，结果为 `pinned=true`、`pin_evidence_source=builtin_section`。未知版本或缺失身份仍保守失败。该结果只证明入口元数据，不证明有效角色规则或完整协调工作流；Windows 原生 transport 清理路径也尚未验收。
 
 接入方可以先用 `instructions` 审查建议规则，再通过受支持的客户端配置明确合并规则并保留既有约束；实际工作流测试需另行授权新的小任务。该初始化器不替你发送消息、覆盖既有指令或启动模型轮次，当前版本也不把人工确认自动写成角色 `verified=true`。
 
