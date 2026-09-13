@@ -10,6 +10,16 @@ Metadata success is not manager-workflow acceptance. The current protocol does
 not read back effective per-thread role instructions; the overall status remains
 `partial` even when naming and pinning are verified.
 
+The exported manager instructions now include the reliable lifecycle protocol:
+register only real external execution and its exact model/source/activity, record
+finished artifacts, offer one named recipient a durable handoff, wait for that
+recipient's explicit accept/reject receipt, and keep next owner/action/due visible
+until the sender explicitly resolves the handoff. A queued outbox item is not
+delivery, delivery is not acceptance, and acceptance is not execution start,
+verification or completion. This is suggested role text only. Existing bound
+threads are not overwritten, resumed or given a new turn; effective role setup
+and host transport remain separately reviewed adopter actions.
+
 ## Start and inspect
 
 ```sh

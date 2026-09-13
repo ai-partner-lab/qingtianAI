@@ -44,6 +44,16 @@ CLI 没有 `health`、`task dispatch`、`task cancel` 或 `task reconcile` 子�
 
 成功声明只进入 `VERIFYING` 和内部复核，不变成审批、预算、部署授权或 verified 证据。需要资料、审批或外部操作时仍走原指定渠道；不要把凭据填入待办正文。复制/查看要求以及取消确认均不写完成事实。
 
+## 外部执行与可靠交接
+
+先 GET 任务的 lifecycle 并保留 revision。只有确有外部执行时才用 `external-register` 登记实际 executor、Sol/Astra 模型、effort、speed、源 task/turn 与活动引用；以后只由相同 executor 用新的单调活动事实更新。普通 evidence、提醒或查看详情都不能刷新活动。超过 15 分钟无真实活动的记录由 `reconcile` 标 lost；该动作不派发、不恢复任务。
+
+执行结束时先以 `external-finish` 登记终态和带 SHA-256 的产物，再由 sender 用 `handoff-offer` 指定唯一 recipient、动作、期限与同一产物清单。经理必须继续承担交接跟踪，直到 recipient 以匹配 manifest 明确 accept/reject；拒收需列 reason 与 missing_items，返修后重新交接。accepted 到期仍未出现与 handoff_id 结构化关联的 recipient execution 时显示“启动逾期”，不能拿同任务下无关联的活动冒充已开始。accept/reject 回执仍须 sender 用 `handoff-resolve` 明确关闭，且都不等于验收或任务完成。任何 unresolved handoff 都会阻断新的 managed dispatch；若接收方确认改走 managed Worker，先由 sender 以 completed resolve 表示“责任移交已完成”，再单独通过正常 admission/dispatch 核对版本与授权。resolve 不授予派发权限，也不把 task 标成 DONE。
+
+outbox 默认只是 durable 待通知账本。`pending` 是待 transport，`claimed` 是有租约的传输处理中，`delivered` 仅表示已登记 transport delivery_ref；当前 `notification_bridge.native_delivery=false`，不能宣称 Codex/聊天消息实际到达。即使以后宿主 bridge 核验送达，delivery 也不等于 recipient accepted。外部系统写入应使用 CLI/API 接入；控制台本轮以可靠只读展示为主，不提供无版本、无身份或一次点击即接单/发布的入口。
+
+发布任务直接核对 `requires_deploy=true`，收口必须同时有 verified deploy 和 smoke。不要用百分比、任务 DONE、交接 accepted/resolved、外部 finish 或普通 CI 成功替代这两项发布证据。
+
 ## 模型和实时连接排障
 
 先运行只读 `qingtian capabilities status`，再对照[模型/推理优先级](ADOPTION.md#模型与推理配置)、目标任务、HTTP admission 和 run 的持久选择。缺失/过期/失配 manifest 或未广告的目标组合失败闭合；按 [能力清单流程](CODEX-CAPABILITIES.md)在私有新路径准备并人工审查，不修改旧清单时间。新 run 冻结七字段目标；旧历史缺完整不可变快照就拒绝 resume，不从当前任务/环境猜测，也不补写旧行。未调用 provider 时只能确认配置和本机 advertisement，不能宣称账户权限、served tier、额度或真实执行。

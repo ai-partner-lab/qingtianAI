@@ -18,6 +18,7 @@
 | `GET /api/health` | HTTP 200 或 watchdog 不健康时 503；`ok,service,pid,mode,automatic_dispatch,read_only,data_dir,workspace,watchdog`。manual 的 read_only 仍是 false。 |
 | `GET /api/dashboard` | 版本化看板；有任务、状态汇总、运行/等待投影等。启用协调器时附加 `qingtian_v2`。 |
 | `GET /api/tasks/{task_id}` | task 字段及 `dependencies,evidence,events,runs`；events 最多最近 100 条，event 的 `payload_json` 是 JSON 字符串。不存在返回 404。 |
+| `GET /api/tasks/{task_id}/lifecycle` | 任务修订、外部执行、可靠交接及通知 outbox 的当前投影。只读；没有记录的旧任务返回 revision 0 / unassigned，不合成执行。 |
 | `GET /api/intakes?limit=30` | `{"intakes":[...]}`；建议使用正整数 limit。 |
 | `GET /api/intakes/{intake_id}` | intake 详情，含 `draft,attachments,messages,tasks,reused`；不暴露内部 execution_prompt/advanced/附件 local_path。 |
 | `GET /api/intakes/{intake_id}/attachments/{attachment_id}` | 经归属/路径/hash 检查后的附件字节；图片 inline，其余 attachment。不是外链代理。 |
@@ -35,6 +36,40 @@
 任务详情及看板任务还返回 `model,reasoning,speed` 和人工动作的 `action_owner_kind,action_owner,action_text,action_due,action_sensitive,action_revision,action_version`。`action_version` 是由持久任务行 revision 生成的不透明比较令牌，不是墙钟时间/内容指纹、权限或完成证据；客户端只原样回传，不自行拼接。
 
 `requires_deploy` 输入必须是 JSON boolean；字符串 `"false"`、数字和 null 会拒绝。明确为 true 时，所有证据 profile 都额外要求 verified deploy 与 smoke；为 false 时，“未部署”等旁证不会扩大任务要求。
+
+### 任务修订、外部执行与可靠交接
+
+任务详情和 dashboard 任务均可带完整 `lifecycle` 投影；独立读取路径为 `GET /api/tasks/{task_id}/lifecycle`。`stage` 只允许 `unassigned/planning/implementation/review/qa/handoff/release/deploy/smoke/closure`，它是业务阶段标签，不改 task state、权限或派发状态。`status` 区分 `idle/awaiting_acceptance/accepted/rejected/execution_active/execution_lost`。`next_action` 明确 `owner_kind,owner,text,due`；执行活动的 `last_activity_at` 与证据 `created_at` 是两套时钟，客户端不得互相替代。
+
+所有 lifecycle POST 使用：
+
+```json
+{
+  "expected_revision": 3,
+  "idempotency_key": "sample-handoff-round-1",
+  "actor": "manager-a",
+  "source_ref": "control-records/round-1",
+  "...action fields...": "..."
+}
+```
+
+`expected_revision` 来自刚读取的 lifecycle；冲突返回 409，重新 GET 后由操作方判断，不能换 key 盲重放。同一 key/同一正文安全重读，同 key/不同正文拒绝。`actor` 与 `source_ref` 是受信本机调用方的声明，不是 Codex 身份认证或新增授权。接口拒绝疑似 Secret 和带查询参数/相对跳转的引用；请求上限 64 KiB。
+
+| POST 后缀 | 动作专有字段 | 精确语义 |
+|---|---|---|
+| `/lifecycle/amend` | `changes`：有界任务字段及 `stage` | 有审计的显式修订；不能把 requires_deploy 从 true 降为 false，也不恢复暂停/终态/只分析任务。 |
+| `/lifecycle/external-register` | `executor,model,reasoning,speed,source_thread,source_turn,last_activity_at,activity_ref,artifacts?,handoff_id?` | 登记一个真实外部执行；不创建 Worker Run、不改变 task state。可选 handoff_id 只有在该交接已 accepted 且 executor 是 recipient 时才建立启动关联；无关联执行不能证明交接已开始。模型须为 Sol/Astra，活动时间不得在未来。 |
+| `/lifecycle/external-activity` | `execution_id,last_activity_at,activity_ref` | 同一 executor 登记单调递增的真实活动；证据更新不能代替活动。 |
+| `/lifecycle/external-finish` | `execution_id,status,finished_at,artifacts` | status 为 finished/failed/canceled；结束外部执行但不授予任务完成或发布。 |
+| `/lifecycle/handoff-offer` | `recipient,deadline,stage,next_action,artifacts` | 创建 offered 交接及 pending outbox；artifacts 必须有 `ref` 与 SHA-256。offer 不是发送、接单或执行。 |
+| `/lifecycle/handoff-accept` | `handoff_id,manifest_sha256` | 只有登记 recipient 可提交匹配 manifest 的接单回执；返回 `execution_started:false`。 |
+| `/lifecycle/handoff-reject` | 上述字段及 `reason,missing_items` | 拒收必须写明原因和至少一项缺项；拒收不是静默结束。 |
+| `/lifecycle/handoff-resolve` | `handoff_id,resolution,resolution_ref` | 只有 sender 可显式关闭；resolution 为 completed/withdrawn/superseded。accepted/rejected 都不会自动关闭。 |
+| `/lifecycle/outbox-claim` | `outbox_id,lease_seconds` | transport 以 1–300 秒租约领取待通知项；返回 token，不自动发送。 |
+| `/lifecycle/outbox-ack` | `outbox_id,claim_token,delivery_ref` | 记录当前 transport 租约的 delivery 回执；当前 bridge 为 manual/native_delivery=false，不证明 Codex 消息实际到达或接收方接单。 |
+| `/lifecycle/reconcile` | 无专有字段 | 把超过 15 分钟无活动的 active 外部执行标记 lost，并登记过期 offered 交接通知；`dispatches:0,resumed_tasks:0`。 |
+
+投影中的 `external_executions[].display_status=lost` 表示活动静默阈值已过。handoff 的 `overdue` 可覆盖 offered 未接单或 accepted 未启动过期；客户端用 `start_overdue` 区分后者，并且只在 `execution_started=true` / `execution_ids` 有结构化关联时称该交接已开始。`outbox.pending/claimed/delivered` 是传输账本，必须分别显示为待通知、传输处理中、已登记 delivery 回执；它们都不是 accepted。`accepted` 也不等于 external execution 已开始、验证通过或完成。未显式 resolved 的 handoff 与未结束外部执行会阻断 DONE 和新的 managed dispatch。若接收方需要改走 managed Worker，sender 先核对接单交付事实，再以 `handoff-resolve` 的 completed 明确结束这次责任移交，之后另行执行正常 admission/dispatch；resolve 表示交接责任关闭，不表示 task 完成或授予派发权限。`requires_deploy=true` 的发布任务另外必须有 verified deploy 与 smoke 证据。
 
 run 字段保留 `id,task_id,attempt,adapter,pid,process_group,session_id,status,exit_code,result_hash,retry_of,failure_kind,failure_stage,failure_type,started_at,finished_at,model,reasoning,speed`。经新准入创建的 run 另有不可变执行目标快照，精确冻结 model、reasoning、speed、worker type、owner session、branch、worktree。运行中或旧 run 不因环境/默认值变化而修改；旧历史缺完整快照时 resume 拒绝，不从任务列猜测，也不回填既有 run 列。`run.status=DONE` 不等于 `task.state=DONE`，更不等于发布；配置字段也不证明 provider 实际执行过该组合。
 

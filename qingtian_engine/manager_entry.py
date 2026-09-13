@@ -31,7 +31,16 @@ MANAGER_INSTRUCTIONS = (
     "authorized workers, avoid duplicate owners, review actual evidence, and report "
     "results and limitations concisely. Preserve existing work and applicable project "
     "policies. Do not resume old tasks or expand deployment permissions without "
-    "authorization. Do not claim background execution or completed acceptance without evidence."
+    "authorization. Use lifecycle external-register/external-activity/external-finish only for "
+    "real external execution with its actual executor, model, source task or turn, and activity; "
+    "never synthesize running state from notes. When work finishes, record its artifacts, use "
+    "handoff-offer for one named recipient, and keep "
+    "the next owner, action, and due time explicit until that recipient accepts or rejects it. "
+    "A queued notification is not delivery, delivery is not acceptance, and acceptance is not "
+    "execution start, verification, or completion. Rejection must identify the reason and missing "
+    "items; every accepted or rejected handoff remains open until handoff-resolve. Manual mode "
+    "does not dispatch automatically, and a host transport must be verified before claiming a "
+    "notification was delivered. Do not claim background execution or completed acceptance without evidence."
 )
 STATE_NAME = "manager-entry.json"
 MAX_MESSAGE = 2 * 1024 * 1024

@@ -377,6 +377,10 @@ def configure_parser() -> argparse.ArgumentParser:
     cancel = sub.add_parser("cancel")
     cancel.add_argument("task_id")
     sub.add_parser("reconcile")
+    lifecycle = sub.add_parser("lifecycle", help="Manual audited lifecycle records; never dispatches")
+    lifecycle.add_argument("task_id")
+    lifecycle.add_argument("action", nargs="?", default="show")
+    lifecycle.add_argument("--payload", help="JSON object with expected_revision, idempotency_key, actor, source_ref")
     feedback = sub.add_parser(
         "feedback", help="Return only state changes not yet delivered to a manager"
     )
@@ -567,6 +571,28 @@ def main(argv: Optional[list] = None) -> int:
         )
     elif args.command == "cancel":
         _json(RunManager(service, data_dir).cancel(args.task_id))
+    elif args.command == "lifecycle":
+        from .lifecycle import LifecycleError
+        try:
+            if args.action == "show":
+                if args.payload:
+                    raise LifecycleError("show does not accept a payload")
+                result = service.lifecycle.snapshot(args.task_id)
+            else:
+                if not args.payload:
+                    raise LifecycleError("--payload is required for mutations")
+                def unique_object(pairs):
+                    value = {}
+                    for key, item in pairs:
+                        if key in value:
+                            raise LifecycleError("duplicate JSON key")
+                        value[key] = item
+                    return value
+                result = service.lifecycle.apply(args.task_id, args.action, json.loads(args.payload, object_pairs_hook=unique_object))
+            _json(result)
+        except (ValueError, TypeError) as exc:
+            _json(exc.payload() if isinstance(exc, LifecycleError) else {"error": str(exc)})
+            return 2
     elif args.command == "reconcile":
         _json(RunManager(service, data_dir).reconcile())
     elif args.command == "feedback":

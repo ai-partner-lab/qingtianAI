@@ -107,6 +107,175 @@ function el(tag, className, text) {
   return node;
 }
 
+/* lifecycle-ui:test:start */
+const LIFECYCLE_STATUS_LABELS = {
+  idle: "生命周期待推进",
+  awaiting_acceptance: "等待接单",
+  accepted: "已接单",
+  rejected: "交接被拒收",
+  execution_active: "外部执行中",
+  execution_lost: "外部执行失联",
+};
+const LIFECYCLE_STAGE_LABELS = {unassigned: "未分配", planning: "规划", implementation: "实施", review: "审查", qa: "质量验收", handoff: "交接", release: "发布", deploy: "部署", smoke: "线上冒烟", closure: "封存"};
+const LIFECYCLE_OWNER_LABELS = {manager: "经理", agent: "执行者", executor: "执行者", user: "用户", recipient: "接收方", external: "外部主责", system: "系统", unknown: "未登记"};
+const LIFECYCLE_EXECUTION_LABELS = {active: "执行中", lost: "失联", finished: "已结束", failed: "失败", canceled: "已取消"};
+const LIFECYCLE_HANDOFF_LABELS = {offered: "待接单", accepted: "已接单", rejected: "已拒收", resolved: "已关闭"};
+
+function lifecycleArray(value) {
+  return Array.isArray(value) ? value.filter((item) => item && typeof item === "object") : [];
+}
+
+function lifecycleLatest(items, fields) {
+  return lifecycleArray(items).reduce((latest, item) => {
+    const stamp = fields.map((field) => Date.parse(item[field] || "")).find(Number.isFinite) || -Infinity;
+    return stamp >= latest.stamp ? {item, stamp} : latest;
+  }, {item: null, stamp: -Infinity}).item;
+}
+
+function lifecycleTime(value) {
+  if (!value) return "未设置";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString("zh-CN", {hour12: false});
+}
+
+function lifecycleView(task, now = Date.now()) {
+  const lifecycle = task && task.lifecycle;
+  if (!lifecycle || typeof lifecycle !== "object") return {available: false};
+  const handoffs = lifecycleArray(lifecycle.handoffs);
+  const currentHandoff = [...handoffs].reverse().find((item) => item.status !== "resolved") || handoffs.at(-1) || null;
+  const executions = lifecycleArray(lifecycle.external_executions);
+  const status = String(lifecycle.status || "idle");
+  const next = lifecycle.next_action && typeof lifecycle.next_action === "object" ? lifecycle.next_action : {};
+  const unfinishedExecutions = executions.filter((item) => ["active", "lost"].includes(item.status) || item.display_status === "lost");
+  const lostExecutions = unfinishedExecutions.filter((item) => item.status === "lost" || item.display_status === "lost");
+  const ownerLostExecution = lostExecutions.find((item) => String(item.executor || "") === String(next.owner || ""));
+  const execution = (status === "execution_lost" && (ownerLostExecution
+    || lifecycleLatest(lostExecutions, ["last_activity_at", "finished_at"])))
+    || lifecycleLatest(unfinishedExecutions, ["last_activity_at", "finished_at"])
+    || lifecycleLatest(executions, ["last_activity_at", "finished_at"]);
+  const outboxRows = lifecycleArray(lifecycle.outbox);
+  const relatedOutbox = currentHandoff
+    ? [...outboxRows].reverse().find((item) => item.handoff_id === currentHandoff.id) || null
+    : outboxRows.at(-1) || null;
+  const deadline = currentHandoff?.deadline || lifecycle.next_action?.due || null;
+  const deadlineMs = Date.parse(deadline || "");
+  const offerOverdue = currentHandoff?.status === "offered" && (Boolean(currentHandoff?.overdue)
+    || (Number.isFinite(deadlineMs) && deadlineMs < now));
+  const startOverdue = currentHandoff?.status === "accepted" && Boolean(currentHandoff?.start_overdue);
+  const overdue = offerOverdue || startOverdue;
+  const executionStatus = String(execution?.display_status || execution?.status || "");
+  let headline = LIFECYCLE_STATUS_LABELS[status] || "生命周期状态未识别";
+  if (status === "awaiting_acceptance") {
+    headline = `${offerOverdue ? "交接超时" : "待接单"} · ${currentHandoff?.recipient || "接收方未登记"}`;
+  } else if (status === "accepted") {
+    const start = currentHandoff?.execution_started ? "已登记关联执行" : startOverdue ? "启动逾期" : "未登记关联执行";
+    headline = `已接单 · ${start} · ${currentHandoff?.recipient || "接收方未登记"}`;
+  } else if (status === "rejected") {
+    headline = `交接被拒收 · ${currentHandoff?.recipient || "接收方未登记"}`;
+  } else if (status === "execution_active") {
+    headline = `外部执行中 · ${execution?.executor || "执行者未登记"}`;
+  } else if (status === "execution_lost") {
+    headline = `外部执行失联 · ${execution?.executor || "执行者未登记"}`;
+  }
+  let delivery = "没有通知传输记录";
+  if (relatedOutbox?.status === "delivered" && lifecycle.notification_bridge?.native_delivery === true) {
+    delivery = "宿主 transport 已确认送达 · 不等于已接单";
+  } else if (relatedOutbox?.status === "delivered") {
+    delivery = "已记录 transport 回执 · 宿主通知未接入，不能证明实际送达或接单";
+  } else if (relatedOutbox?.status === "claimed") delivery = "通知传输处理中 · 尚未送达";
+  else if (relatedOutbox?.status === "pending") delivery = "待通知 · 宿主需接入或继续投递";
+  else if (currentHandoff?.status === "accepted") delivery = "接收方已接单 · 不等于已开始或完成";
+  else if (currentHandoff?.status === "rejected") delivery = "接收方已拒收 · 等待补齐后重新交接";
+  else if (currentHandoff?.status === "resolved") delivery = "交接已显式关闭";
+  else if (currentHandoff?.status === "offered" && lifecycle.notification_bridge?.native_delivery === false) {
+    delivery = "待通知 · 宿主需接入（当前仅有交接账本）";
+  }
+  const evidence = lifecycleArray(task.evidence);
+  const evidenceUpdatedAt = lifecycleLatest(evidence, ["created_at", "recorded_at", "updated_at"]);
+  const missingItems = Array.isArray(currentHandoff?.missing_items) ? currentHandoff.missing_items.map(String) : [];
+  return {
+    available: true,
+    revision: lifecycle.revision,
+    stage: LIFECYCLE_STAGE_LABELS[lifecycle.stage] || lifecycle.stage || "未登记",
+    meaningful: Number(lifecycle.revision || 0) > 0 || Boolean(lifecycle.stage && lifecycle.stage !== "unassigned") || Boolean(currentHandoff || execution),
+    status,
+    headline,
+    overdue,
+    offerOverdue,
+    startOverdue,
+    nextOwner: next.owner || (next.owner_kind === "user" ? "用户" : "责任人未登记"),
+    nextOwnerKind: next.owner_kind || "unknown",
+    nextOwnerKindLabel: LIFECYCLE_OWNER_LABELS[next.owner_kind] || next.owner_kind || "未登记",
+    nextText: next.text || "下一动作未登记",
+    due: next.due || deadline,
+    delivery,
+    activityAt: execution?.last_activity_at || null,
+    activityText: execution ? `${execution.executor || "执行者未登记"} · ${executionStatus || "状态未登记"}` : "没有外部执行记录",
+    evidenceAt: evidenceUpdatedAt?.created_at || evidenceUpdatedAt?.recorded_at || evidenceUpdatedAt?.updated_at || null,
+    handoffStatus: currentHandoff?.status || null,
+    rejectionReason: currentHandoff?.rejection_reason || "",
+    missingItems,
+    blockers: Array.isArray(lifecycle.completion_blockers) ? lifecycle.completion_blockers.map(String) : [],
+    requiresDeploy: task.requires_deploy === true || task.requires_deploy === 1,
+    latestExecutionId: execution?.id || null,
+    executionRows: executions,
+    handoffRows: handoffs,
+  };
+}
+/* lifecycle-ui:test:end */
+
+function lifecyclePanel(task, compact = false) {
+  const view = lifecycleView(task);
+  if (!view.available || (compact && !view.meaningful)) return null;
+  const section = el("section", `lifecycle-panel lifecycle-${view.status}${view.overdue ? " is-overdue" : ""}`);
+  const head = el("div", "lifecycle-head");
+  head.append(el(compact ? "strong" : "h3", "", view.headline), el("small", "", `阶段 ${view.stage} · r${view.revision ?? "?"}`));
+  section.append(head);
+  const next = el("p", "lifecycle-next", `下一责任：${view.nextOwner}（${view.nextOwnerKindLabel}） · ${view.nextText}`);
+  section.append(next, el("p", "lifecycle-due", `期限：${lifecycleTime(view.due)}`));
+  const clocks = el("div", "lifecycle-clocks");
+  clocks.append(
+    el("span", "", `最近执行活动：${view.activityAt ? lifecycleTime(view.activityAt) : "未记录"} · ${view.activityText}`),
+    el("span", "", `证据更新时间：${view.evidenceAt ? lifecycleTime(view.evidenceAt) : "未提供"}（不等于执行活动）`),
+  );
+  section.append(clocks, el("p", "lifecycle-delivery", view.delivery));
+  if (view.rejectionReason) section.append(el("p", "lifecycle-rejection", `拒收原因：${view.rejectionReason}`));
+  if (view.missingItems.length) section.append(el("p", "lifecycle-missing", `需补齐：${view.missingItems.join(" / ")}`));
+  if (!compact && view.blockers.length) section.append(el("p", "lifecycle-blockers", `完成门禁：${view.blockers.join(" / ")}`));
+  if (view.requiresDeploy) section.append(el("p", "lifecycle-release", "发布任务：必须具备 verified deploy + smoke 证据；接单、执行结束或交接关闭均不等于发布完成。"));
+  if (!compact && (view.executionRows.length || view.handoffRows.length)) {
+    const history = el("details", "lifecycle-history");
+    history.append(el("summary", "", "交接与执行记录（历史不等于当前活动）"));
+    if (view.executionRows.length) {
+      history.append(el("h4", "", "外部执行者"));
+      for (const item of view.executionRows) {
+        const rawStatus = item.display_status || item.status;
+        const status = LIFECYCLE_EXECUTION_LABELS[rawStatus] || rawStatus || "状态未登记";
+        const row = el("article", item.id === view.latestExecutionId ? "is-latest" : "");
+        row.append(
+          el("strong", "", `${item.executor || "执行者未登记"} · ${status}`),
+          el("span", "", `模型 ${item.model || "未登记"} / ${item.reasoning || "未登记"} / ${item.speed || "未登记"}`),
+          el("span", "", `最近活动 ${lifecycleTime(item.last_activity_at)} · 产物 ${Array.isArray(item.artifacts) ? item.artifacts.length : 0} 项`),
+        );
+        history.append(row);
+      }
+    }
+    if (view.handoffRows.length) {
+      history.append(el("h4", "", "交接历史"));
+      for (const item of view.handoffRows) {
+        const row = el("article", "");
+        row.append(
+          el("strong", "", `${item.sender || "发起方未登记"} → ${item.recipient || "接收方未登记"}`),
+          el("span", "", `状态 ${LIFECYCLE_HANDOFF_LABELS[item.status] || item.status || "未登记"} · ${item.execution_started ? "已登记关联执行" : item.start_overdue ? "启动逾期" : "未登记关联执行"} · 期限 ${lifecycleTime(item.deadline)}`),
+        );
+        history.append(row);
+      }
+    }
+    section.append(history);
+  }
+  return section;
+}
+
 function setConnection(mode, label) {
   connectionMode = mode;
   const health = document.querySelector("#health");
@@ -272,7 +441,7 @@ function renderStats(data) {
     const count = state === "DONE"
       ? Number(rolling.done || 0)
       : (data.columns[state] || []).length;
-    const displayLabel = state === "DONE" ? "过去24小时完成" : label;
+    const displayLabel = state === "DONE" ? "过去24小时完成" : state === "RUNNING" ? "引擎执行中" : label;
     const card = el("div", "stat");
     const strong = el("strong", "", String(count));
     strong.style.color = stateColors[state];
@@ -288,6 +457,12 @@ function renderStats(data) {
     }
     host.append(card);
   }
+  const externalActive = (data.tasks || []).filter((task) => task.lifecycle?.status === "execution_active").length;
+  const external = el("div", "stat lifecycle-stat");
+  const externalValue = el("strong", "", String(externalActive));
+  externalValue.style.color = "#37d6d0";
+  external.append(externalValue, el("span", "", "已登记外部执行中"), el("small", "waiting-breakdown", "来自 lifecycle · 不改变引擎任务状态"));
+  host.append(external);
   const average = el("div", "stat");
   const averageValue = el("strong", "", `${Number(rolling.average_progress || 0)}%`);
   averageValue.style.color = "#b996ff";
@@ -386,6 +561,10 @@ function humanAction(task) {
 
 function humanActionSummary(task) {
   const action = humanAction(task);
+  const lifecycle = lifecycleView(task);
+  if (lifecycle.available && lifecycle.meaningful) {
+    return `生命周期下一步：${lifecycle.nextOwner} · ${lifecycle.nextText}`;
+  }
   if (["user", "external"].includes(action.owner_kind)) {
     const owner = action.owner_kind === "user" ? "你需要" : `等待 ${action.owner || "外部主责"}`;
     return `${owner}：${action.text || "具体要求尚未登记，请联系任务主责补充缺什么、提交渠道和下一步。"}`;
@@ -649,10 +828,10 @@ function taskCard(task, previousTask = null, changed = false) {
   const badge = node.querySelector(".state-badge");
   badge.classList.add(`state-${visualState.toLowerCase()}`);
   badge.style.setProperty("--state-color", stateColors[visualState] || "#ff6b75");
-  node.querySelector(".state-label").textContent =
+  node.querySelector(".state-label").textContent = "引擎：" + (
     visualState === "WAITING" && task.waiting_category
       ? task.waiting_category.label
-      : (stateLabels[visualState] || visualState);
+      : (stateLabels[visualState] || visualState));
   node.querySelector("h3").textContent = task.title;
   const action = node.querySelector(".action-summary");
   action.textContent = humanActionSummary(task);
@@ -671,6 +850,8 @@ function taskCard(task, previousTask = null, changed = false) {
   const activity = el("div", "task-activity", taskActivity(task));
   activity.classList.toggle("is-stale", ["EVENT_STALE", "PROCESS_LOST", "NO_RUN"].includes(task.runtime_status?.code));
   node.append(activity);
+  const lifecycle = lifecyclePanel(task, true);
+  if (lifecycle) node.append(lifecycle);
   if (changed) node.classList.add("is-updated");
   if (previousTask && previousTask.state !== "DONE" && task.state === "DONE") {
     node.classList.add("just-completed");
@@ -1407,7 +1588,7 @@ function admissionReceiptMatches(result, taskId, request) {
     && Object.hasOwn(ADMISSION_LABELS, receipt.state);
 }
 
-function admissionPanel(snapshot) {
+function admissionPanel(snapshot, lifecycleTask = null) {
   const panel = el("section", "admission-panel");
   panel.append(el("h4", "", "调度接纳与当前等待"));
   if (!snapshot || snapshot.schema_version !== 1 || !snapshot.current) {
@@ -1420,9 +1601,9 @@ function admissionPanel(snapshot) {
   const fields = [
     ["原因码", current.reason_code], ["处理责任", `${current.responsibility?.kind || "未登记"} · ${current.responsibility?.declared_owner || "具体责任人未登记"}`],
     ["下一动作", current.next_action], ["恢复条件", current.recovery_condition],
-    ["事实版本", snapshot.revision ?? "未登记"], ["真实运行", current.run_id || "未确认，不创建占位执行"],
-    ["运行当前状态（与接单分开）", current.run_status || "未登记"],
-    ["执行槽", current.executor ? `${current.executor.adapter} / attempt ${current.executor.attempt}；机器与人员身份未登记` : "未绑定唯一执行槽"],
+    ["事实版本", snapshot.revision ?? "未登记"], ["受管 Run", current.run_id || "未确认，不创建受管 Run 占位"],
+    ["受管 Run 当前状态（与接单、外部执行分开）", current.run_status || "未登记"],
+    ["受管执行槽", current.executor ? `${current.executor.adapter} / attempt ${current.executor.attempt}；机器与人员身份未登记` : "未绑定唯一受管执行槽"],
     ["会话", current.session_id || "未登记，不猜会话链接"],
   ];
   const list = el("dl", "clarity-fields");
@@ -1432,6 +1613,10 @@ function admissionPanel(snapshot) {
     list.append(field);
   }
   panel.append(list);
+  const lifecycleState = lifecycleView(lifecycleTask);
+  if (lifecycleState.available && lifecycleState.executionRows.length) {
+    panel.append(el("p", "lifecycle-admission-summary", `生命周期摘要：已登记外部执行 ${lifecycleState.executionRows.length} 项 · ${lifecycleState.headline} · 最近执行活动 ${lifecycleState.activityAt ? lifecycleTime(lifecycleState.activityAt) : "未记录"}。该账本不等于受管 Run 或受管执行槽。`));
+  }
   if (snapshot.basis_stale) panel.append(el("p", "clarity-warning", "原回执的理由已失效，历史保留；请按当前事实重新核对，不会自动恢复。"));
   panel.append(el("p", "release-assurance", "发消息成功不是接单；心跳不是实质进展。仅手动派发入口有此回执；宿主ack与旧intake/retry/自动派发尚未接入。"));
   const history = el("details", "admission-history");
@@ -1483,7 +1668,7 @@ function admissionDispatchForm(task, isCurrent) {
       if (!isCurrent() || generation !== draft.generation || admissionDrafts.get(task.id) !== draft) return;
       if (!admissionReceiptMatches(result, task.id, draft.request)) throw new Error("回执身份/原始版本不匹配");
       draft.resolved = !["pending", "uncertain"].includes(result.receipt.state);
-      resultHost.replaceChildren(admissionPanel(result));
+      resultHost.replaceChildren(admissionPanel(result, task));
       status.textContent = `原回执：${ADMISSION_LABELS[result.receipt.state]}；当前状态见上方回执区域。`;
       reset.disabled = !draft.resolved;
     } catch (error) {
@@ -1520,13 +1705,17 @@ async function openDetail(taskId, notice = "") {
   const liveTask = (dashboard?.tasks || []).find((item) => item.id === taskId);
   document.querySelector("#detailTitle").textContent = task.title;
   renderTaskConversation(task);
-  body.replaceChildren(renderActionRequirement(task));
+  body.replaceChildren();
+  const lifecycleState = lifecycleView(task);
+  if (!lifecycleState.meaningful || humanAction(task).owner_kind !== "none") body.append(renderActionRequirement(task));
   if (notice) {
     const feedback = el("p", "action-feedback", notice);
     feedback.setAttribute("role", "status");
     body.append(feedback);
   }
-  body.append(admissionPanel(task.admission), admissionDispatchForm(task, () => request === detailRequest && document.querySelector("#detailDialog").open));
+  body.append(admissionPanel(task.admission, task), admissionDispatchForm(task, () => request === detailRequest && document.querySelector("#detailDialog").open));
+  const lifecycle = lifecyclePanel(task);
+  if (lifecycle) body.append(lifecycle);
   const action = humanAction(task);
   const recovery = liveTask?.runtime_status?.recovery;
   if (recovery?.required) {
@@ -1548,7 +1737,7 @@ async function openDetail(taskId, notice = "") {
   technical.append(technicalSummary);
   const grid = el("div", "detail-grid");
   const fields = [
-    ["当前阶段", `${stateLabels[taskDisplayState(liveTask || task)] || task.state}（非工作量百分比）`],
+    ["当前阶段", `引擎任务状态：${stateLabels[taskDisplayState(liveTask || task)] || task.state}（与外部执行活动分开）`],
     ["运行活动", taskActivity(liveTask || task) || "暂无执行活动"],
     ["人工动作主责", action.owner || "无"],
     ["动作期限", action.due || "未设置"],
@@ -2469,7 +2658,8 @@ function clarityCard(task) {
     card.append(el("p", "clarity-warning", "版本未登记 / 待核对：仅可只读查看任务、来源与关联记录；说明更正和普通完成报告不可用。"));
   }
   card.append(el("p", "release-note", `${clarityText(task.category_label)}${task.category === "deferred" ? " · 不计入紧急事项" : ""}`));
-  card.append(admissionPanel(task.admission));
+  const dashboardTask = (dashboard?.tasks || []).find((candidate) => candidate.id === task.id);
+  card.append(admissionPanel(task.admission, dashboardTask || task));
   const fields = el("dl", "clarity-fields");
   for (const [key, label] of CLARITY_FIELDS) {
     const field = el("div");

@@ -381,6 +381,9 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
             self._json(HTTPStatus.FORBIDDEN, {"error": "loopback Host and matching port required"})
             return
         parsed = urlparse(self.path)
+        from .lifecycle import handle_lifecycle_http
+        if handle_lifecycle_http(self, "GET"):
+            return
         if parsed.path == "/":
             self._file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
         elif parsed.path == "/app.js":
@@ -510,6 +513,9 @@ class ControlPlaneHandler(BaseHTTPRequestHandler):
             return
         if not self._same_origin():
             self._json(HTTPStatus.FORBIDDEN, {"error": "cross-origin mutation rejected"})
+            return
+        from .lifecycle import handle_lifecycle_http
+        if handle_lifecycle_http(self, "POST"):
             return
         parsed = urlparse(self.path)
         try:

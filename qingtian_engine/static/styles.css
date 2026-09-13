@@ -818,6 +818,31 @@ input:focus, textarea:focus, select:focus { border-color: var(--cyan); }
 .task-activity { margin-top: 10px; color: var(--muted); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
 .task-activity:empty { display: none; }
 .task-activity.is-stale { color: var(--amber); }
+.lifecycle-panel { display: grid; gap: 7px; min-width: 0; margin-top: 11px; padding: 11px; border: 1px solid rgba(112,165,255,.32); border-radius: 10px; color: #d7e2ec; background: rgba(112,165,255,.055); font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.lifecycle-panel.is-overdue, .lifecycle-panel.lifecycle-rejected, .lifecycle-panel.lifecycle-execution_lost { border-color: rgba(255,107,117,.48); background: rgba(255,107,117,.07); }
+.lifecycle-panel.lifecycle-execution_active { border-color: rgba(55,214,208,.36); background: rgba(55,214,208,.055); }
+.lifecycle-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.lifecycle-head h3, .lifecycle-head strong { margin: 0; color: #f2f7fb; font-size: 12px; }
+.lifecycle-head small { color: var(--muted); font-size: 9px; text-align: right; }
+.lifecycle-next { color: #eef5fb; font-weight: 700; }
+.lifecycle-due, .lifecycle-delivery { color: #bdc9d5; }
+.lifecycle-clocks { display: grid; gap: 3px; color: var(--muted); font-size: 10px; }
+.lifecycle-delivery { padding-top: 6px; border-top: 1px solid rgba(141,153,168,.18); }
+.lifecycle-rejection, .lifecycle-missing, .lifecycle-blockers { color: #ffb4ba; }
+.lifecycle-release { padding: 7px 8px; border-radius: 7px; color: #ffe0ad; background: rgba(255,191,105,.09); font-weight: 700; }
+.lifecycle-history { margin-top: 2px; border-top: 1px solid rgba(141,153,168,.18); padding-top: 7px; }
+.lifecycle-history summary { color: #cbd7e2; cursor: pointer; font-weight: 700; }
+.lifecycle-history h4 { margin: 10px 0 5px; color: var(--muted); font-size: 10px; }
+.lifecycle-history article { display: grid; gap: 2px; margin-top: 5px; padding: 7px; border-radius: 7px; background: rgba(255,255,255,.025); }
+.lifecycle-history article.is-latest { border-left: 2px solid var(--cyan); }
+.lifecycle-history article span { color: var(--muted); font-size: 10px; }
+.lifecycle-legend { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.45; }
+@media (max-width: 520px) {
+  .lifecycle-panel { padding: 9px; }
+  .lifecycle-head { display: grid; gap: 2px; }
+  .lifecycle-head small { text-align: left; }
+  .lifecycle-next { font-size: 11px; }
+}
 .card-progress .progress-value { text-align: left; width: auto; font-size: 12px; }
 .card-top { display: flex; justify-content: space-between; align-items: center; }
 .priority { font-size: 10px; font-weight: 800; color: var(--pink); }

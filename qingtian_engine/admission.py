@@ -18,6 +18,7 @@ from .service import is_paused_by_user
 ASSURANCE = "local_persisted_admission_not_execution_progress_or_external_host_ack"
 TARGET_FIELDS = ("model", "reasoning", "speed", "worker_type", "owner_session", "branch", "worktree")
 REASONS = {
+    "lifecycle_unresolved": ("manager", "先核对并结束外部执行或解决交接责任；不得重复派发", "生命周期责任已显式解决"),
     "task_saved_no_dispatch_receipt": ("manager", "审阅范围；需要执行时显式派发", "明确执行授权和当前版本"),
     "dispatch_confirmation_pending": ("operator", "核查原请求及真实运行；不要重复启动", "原请求确认或人工核对运行记录"),
     "local_run_recorded": ("local_runtime", "查看已绑定运行的真实事件", "运行提供实质事件；心跳不算进展"),
@@ -114,10 +115,12 @@ class AdmissionService:
         targets = {row["run_id"]: json.loads(row["target_json"]) for row in connection.execute("SELECT * FROM admission_run_targets WHERE task_id=?", (task_id,))}
         execution_target = {key: task.get(key) for key in TARGET_FIELDS}
         intake = connection.execute("SELECT intent FROM intakes WHERE id=?", (task.get("source_request_id"),)).fetchone() if task.get("source_request_id") else None
+        from .lifecycle import LifecycleService
+        lifecycle = LifecycleService(self.db).snapshot(task_id, connection)
         basis = {"task": native_basis(task), "scope": {key: task.get(key) for key in ("title", "scope_summary", "repository", "base_branch", "environment", "authorization_policy", "imported_from", "execution_mode", "requires_deploy", "evidence_profile")},
                  "dependencies": deps, "runs": runs, "intake_intent": intake[0] if intake else None}
         return {"task": task, "revision": revision, "basis": digest(basis), "scope_hash": digest(basis["scope"]), "execution_target_hash": digest(execution_target), "run_targets": targets, "dependencies": deps,
-                "runs": runs, "forbidden": execution_forbidden(task, intake_intent=basis["intake_intent"])}
+                "runs": runs, "lifecycle_blockers": lifecycle["completion_blockers"], "forbidden": execution_forbidden(task, intake_intent=basis["intake_intent"])}
 
     def _guard(self, facts):
         task = facts["task"]
@@ -127,6 +130,8 @@ class AdmissionService:
             return "rejected", "task_terminal"
         if facts["forbidden"]:
             return "rejected", "execution_forbidden"
+        if facts["lifecycle_blockers"]:
+            return "deferred", "lifecycle_unresolved"
         if task.get("action_sensitive"):
             return "rejected", "sensitive_approval_required"
         if task.get("environment", "").lower() in {"prod", "pro", "production"} or task.get("base_branch", "").lower() in {"main", "master", "origin/main", "origin/master"}:

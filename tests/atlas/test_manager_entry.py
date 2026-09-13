@@ -20,6 +20,26 @@ from qingtian_engine import manager_entry as entry
 from qingtian_engine.entrypoint import main
 
 
+class ManagerInstructionContractTests(unittest.TestCase):
+    def test_reliable_handoff_facts_are_not_collapsed(self):
+        instructions = entry.MANAGER_INSTRUCTIONS
+        for phrase in (
+                "lifecycle external-register/external-activity/external-finish",
+                "handoff-offer for one named recipient",
+                "queued notification is not delivery",
+                "delivery is not acceptance",
+                "acceptance is not execution start",
+                "until handoff-resolve",
+                "Manual mode does not dispatch automatically",
+                "host transport must be verified"):
+            self.assertIn(phrase, instructions)
+
+    def test_manager_instructions_do_not_promise_automatic_delivery(self):
+        lowered = entry.MANAGER_INSTRUCTIONS.lower()
+        self.assertNotIn("automatically delivers", lowered)
+        self.assertNotIn("automatically dispatches", lowered)
+
+
 class FakeServer:
     def __init__(self, workspace):
         self.workspace = str(workspace)

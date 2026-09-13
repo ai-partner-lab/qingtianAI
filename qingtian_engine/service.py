@@ -260,6 +260,8 @@ class ControlPlane:
         self.db = db
         self.manager_entry_workspace = manager_entry_workspace
         self.db.initialize()
+        from .lifecycle import LifecycleService
+        self.lifecycle = LifecycleService(self.db)
         self.releases = ReleaseService(self.db.connect)
         self.operations_clarity = OperationsClarityService(self.db._read_connection, required_evidence=self._required_evidence_for_task,
                                                           paused_predicate=is_paused_by_user)
@@ -593,6 +595,10 @@ class ControlPlane:
         version = _version_for(native, snapshot)
         task["revision"] = version["revision"] if version else None
         task["completion_basis"] = completion_basis(native, snapshot, self._required_evidence_for_task(native))
+        task["lifecycle"] = self.lifecycle.snapshot(task_id, connection)
+        if task["lifecycle"]["completion_blockers"]:
+            task["completion_basis"]["eligible"] = False
+            task["completion_basis"]["lifecycle_blockers"] = task["lifecycle"]["completion_blockers"]
         return task
 
     def completion_eligibility(self, task_id: str, connection=None) -> Dict[str, Any]:
@@ -604,7 +610,12 @@ class ControlPlane:
             task = next((t for t in snapshot["tasks"] if t["id"] == task_id), None)
             if task is None:
                 raise KeyError("task not found")
-            return completion_basis(task, snapshot, self._required_evidence_for_task(task))
+            gate = completion_basis(task, snapshot, self._required_evidence_for_task(task))
+            blockers = self.lifecycle.snapshot(task_id, connection)["completion_blockers"]
+            if blockers:
+                gate["eligible"] = False
+                gate["lifecycle_blockers"] = blockers
+            return gate
 
     def _complete_task(self, task_id, producer, summary, dedupe_key, progress, force):
         with self.db.connect() as connection, transaction_scope(connection, write=True):
@@ -612,6 +623,9 @@ class ControlPlane:
             if native is None:
                 raise KeyError("task not found")
             task = dict(native)
+            blockers = self.lifecycle.snapshot(task_id, connection)["completion_blockers"]
+            if blockers:
+                raise OperationsError("cannot complete; " + ", ".join(blockers), "stale", 409)
             if task["state"] == "DONE":
                 return self._task_detail(connection, task)
             if not force and "DONE" not in ALLOWED_TRANSITIONS.get(task["state"], set()):
@@ -882,6 +896,12 @@ class ControlPlane:
 
         execution_mode = str(task.get("execution_mode") or "managed").lower()
         if stored_state == "RUNNING" and execution_mode in {"external", "delegated"}:
+            if self.db.one("SELECT 1 FROM lifecycle_external_executions WHERE task_id=? LIMIT 1", (task["id"],)):
+                # Adoption of structured execution retires this task's old
+                # heartbeat watchdog. Observe lifecycle facts without advancing
+                # the task or rewriting its legacy heartbeat/history.
+                result.update(source="lifecycle_external", reason="structured activity supersedes legacy task heartbeat")
+                return result
             heartbeat_at = task.get("heartbeat_at") or task.get("updated_at")
             expired = heartbeat_at is None
             if heartbeat_at:
@@ -1075,6 +1095,8 @@ class ControlPlane:
             """
         )
         for task in dependency_waiters:
+            if self.lifecycle.snapshot(task["id"])["completion_blockers"]:
+                continue
             if self.unresolved_dependencies(task["id"]):
                 continue
             if str(task.get("action_owner_kind") or "none") != "none":
@@ -1326,85 +1348,17 @@ class ControlPlane:
         reasoning: Optional[str] = None,
         speed: Optional[str] = None,
     ) -> Dict[str, Any]:
-        task = self.get_task(task_id)
         clean_mode = str(execution_mode or "external").lower()
         if clean_mode not in {"external", "delegated"}:
             raise ValueError("heartbeat mode must be external or delegated")
-        if task["state"] in {"DONE", "CANCELED"}:
-            raise ValueError("terminal task cannot register an execution heartbeat")
         if model is not None or reasoning is not None:
             require_execution_model(model, reasoning)
-            if is_paused_by_user(task):
-                raise ValueError("user-paused task cannot register a new execution model")
         if speed is not None and (not isinstance(speed, str) or speed not in EXECUTION_SPEEDS):
             raise ValueError("MODEL_POLICY: speed must be standard or fast")
         if speed is not None and (model is None or reasoning is None):
             raise ValueError("MODEL_POLICY: speed registration requires explicit model and reasoning")
-        active_run = self.db.one(
-            "SELECT * FROM runs WHERE task_id=? AND status IN ('QUEUED','RUNNING') "
-            "ORDER BY attempt DESC LIMIT 1",
-            (task_id,),
-        )
-        local_run_alive = bool(
-            active_run and self._process_alive(active_run.get("pid"))
-        )
-        now = utc_now()
-        if model is not None:
-            self.db.execute(
-                "UPDATE tasks SET model=?, reasoning=?,speed=? WHERE id=?",
-                (model, reasoning, task["speed"] if speed is None else speed, task_id),
-            )
-            self.db.add_event(
-                task_id, "task.execution_model_registered", producer,
-                "已登记本次外部执行配置；历史 Run 保持原记录",
-                "execution-model:{}:{}:{}:{}".format(task_id, model, reasoning, now),
-                {"previous_model": task["model"], "previous_reasoning": task["reasoning"],
-                 "model": model, "reasoning": reasoning, "speed": speed,
-                 "source": "external-owner", "assurance": "declared_execution_parameters_not_independent_host_verification"},
-            )
-        self.db.execute(
-            """
-            UPDATE tasks SET execution_mode=?, heartbeat_at=?,
-                blocking_reason='', updated_at=?
-            WHERE id=?
-            """,
-            (
-                "managed" if local_run_alive else clean_mode,
-                None if local_run_alive else now,
-                now,
-                task_id,
-            ),
-        )
-        if task["state"] != "RUNNING":
-            self.transition(
-                task_id,
-                "RUNNING",
-                producer=producer,
-                summary=(
-                    "检测到存活本地执行器，任务恢复执行中"
-                    if local_run_alive
-                    else (
-                        "已登记 Codex 直接委派执行"
-                        if clean_mode == "delegated"
-                        else "已登记外部执行"
-                    )
-                ),
-                dedupe_key="execution-heartbeat-resumed:{}:{}".format(
-                    task_id, now
-                ),
-                force=True,
-            )
-        self.db.add_event(
-            task_id,
-            "task.external_heartbeat",
-            producer,
-            "外部执行心跳已更新",
-            "external-heartbeat:{}:{}".format(task_id, now[:16]),
-            {
-                "state": self.get_task(task_id)["state"],
-                "execution_mode": "managed" if local_run_alive else clean_mode,
-            },
-        )
+        self.lifecycle.record_legacy_heartbeat(
+            task_id, producer, clean_mode, model, reasoning, speed, self._process_alive)
         return self.get_task(task_id)
 
     def reroute(self, task_id: str) -> Dict[str, Any]:
@@ -1505,6 +1459,11 @@ class ControlPlane:
             version = _version_for(task, operations_snapshot)
             task["revision"] = version["revision"] if version else None
             task["completion_basis"] = completion_basis(task, operations_snapshot, operations_snapshot["required_by_task"][task["id"]])
+            with self.db._read_connection() as lifecycle_connection:
+                task["lifecycle"] = self.lifecycle.snapshot(task["id"], lifecycle_connection, now)
+            if task["lifecycle"]["completion_blockers"]:
+                task["completion_basis"]["eligible"] = False
+                task["completion_basis"]["lifecycle_blockers"] = task["lifecycle"]["completion_blockers"]
         analysis_intakes = {
             row["id"] for row in self.db.all("SELECT id FROM intakes WHERE intent='analyze'")
         }
@@ -1719,6 +1678,19 @@ class ControlPlane:
                         "action": "已检测到存活执行器，正在校正任务状态",
                     }
                 )
+            elif (task["state"] == "RUNNING" and execution_mode in {"external", "delegated"}
+                  and not state_resolution.get("live_run")
+                  and task.get("lifecycle", {}).get("external_executions")):
+                lifecycle = task["lifecycle"]
+                lost = lifecycle["status"] == "execution_lost"
+                active = lifecycle["status"] == "execution_active"
+                runtime.update({
+                    "code": "RECOVERY_REQUIRED" if lost else ("EXTERNAL" if active else "IDLE"),
+                    "label": "结构化外部执行失联" if lost else ("结构化外部执行活动正常" if active else "结构化执行已结束，等待后续验收"),
+                    "action": lifecycle["next_action"]["text"] or "核对后续交接与验收；不会自动销项",
+                    "heartbeat_age_seconds": None,
+                    "recovery": {"required": lost, "automatic": False, "activity_endpoint": "/api/tasks/{}/lifecycle/external-activity".format(task["id"])},
+                })
             elif (
                 task["state"] == "RUNNING"
                 and execution_mode in {"external", "delegated"}

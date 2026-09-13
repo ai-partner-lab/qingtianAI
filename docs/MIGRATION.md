@@ -4,6 +4,10 @@
 
 当前源码版本为 **0.6.0**。稳定发布门禁覆盖独立安装、全量回归和发行物审查；真实 provider 仍由采用方接入。Codex 首次入口元数据与置顶在已识别宿主上已验证，但有效角色规则因宿主不可回读仍需人工验收。下方 0.4 → 0.5 说明保留历史上下文，不能充当本次升级回执。
 
+本轮可靠交接迁移使用独立的 additive lifecycle schema v1，只追加 lifecycle meta/version/request、external execution、handoff 与 outbox 结构，不改变现有主 schema 版本，不重写 task/run/event/evidence，也不把旧记录变成当前任务。旧任务仅得到 revision 0、stage unassigned 的空投影；控制台任务卡保持安静，详情可说明尚无 lifecycle 记录。迁移不会根据旧 evidence、标题或历史会话合成外部执行、offer、delivery、acceptance 或授权。
+
+采用方升级后先在副本或新私有数据目录核对：空旧任务不出现“执行中”；新外部执行可被 15 分钟静默对账为 lost；offered 交接重启后仍在且过期可见；accept/reject 均需显式 resolve；manual 模式不会自动派发。宿主通知 transport 仍是采用方集成点，数据库 outbox ACK 不证明 Codex 实际送达。发布任务的 requires_deploy 不可被 lifecycle amendment 降级，并继续要求 verified deploy 与 smoke。
+
 0.6.0 的引擎数据库 schema 为 **10**。初始化旧引擎库时新增 `tasks.action_revision`，旧行初值 0 只是迁移基线，不是重建的历史动作次数；revision 迁移不回填旧事件，不重建或替换任务表。既有参考/只分析授权策略迁移仍适用，不会把这些记录变成实施授权。
 
 数据库触发器在每次任务行 UPDATE 后单调推进 revision，包括同值写入。人工动作 `action_version` 基于任务 ID 与该 revision，客户端视为不透明令牌；摘要等其他字段更新也可使旧令牌失效。升级后先重新 GET，遇到 409 时再次展示最新要求并确认，不能重放升级前缓存的完成声明。省略版本的旧调用只保留原子操作兼容，不具备过时界面检测。详见 [人工动作合同](ENGINE-API.md#人工动作完成声明)。

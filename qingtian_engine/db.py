@@ -438,6 +438,9 @@ class Database:
             from .admission import initialize_admission_schema
 
             initialize_admission_schema(connection)
+            from .lifecycle import initialize_lifecycle_schema
+
+            initialize_lifecycle_schema(connection)
         try:
             os.chmod(self.path, 0o600)
         except OSError:

@@ -85,6 +85,8 @@ class RunManager:
         dry_run: bool = False,
     ) -> Dict[str, Any]:
         task = self.service.get_task(task_id)
+        if task.get("lifecycle", {}).get("completion_blockers"):
+            raise RuntimeError("LIFECYCLE: unresolved handoff or external execution blocks managed dispatch")
         if _execution_forbidden(task):
             raise RuntimeError(
                 "AUTHORIZATION: plan-only task cannot execute; create a separately "
@@ -1110,6 +1112,7 @@ class RunManager:
 
     def reconcile(self) -> Dict[str, int]:
         """Mark stale wrappers lost after crashes without replaying an external action."""
+        lifecycle_result = self.service.lifecycle.reconcile_due()
         queued_without_pid = self.db.all(
             "SELECT * FROM runs WHERE status='QUEUED' AND pid IS NULL"
         )
@@ -1178,6 +1181,10 @@ class RunManager:
         return {
             "alive": alive,
             "stale": stale,
+            "lifecycle_tasks_reconciled": lifecycle_result["tasks_reconciled"],
+            "lifecycle_lost_executions": lifecycle_result["lost_executions"],
+            "lifecycle_overdue_handoffs": lifecycle_result["overdue_handoffs"],
+            "lifecycle_start_overdue_handoffs": lifecycle_result["start_overdue_handoffs"],
             "state_synchronized": state_result["synchronized"],
             "live_run_restored": state_result["live_run_restored"],
             "run_completed": state_result["run_completed"],

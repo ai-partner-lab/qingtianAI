@@ -3,6 +3,22 @@
 All notable changes to Qingtian AI are documented here. The project follows semantic
 versioning once public releases are tagged.
 
+## Unreleased
+
+- Add an additive lifecycle schema v1 for versioned task amendments, real external
+  execution activity, manifest-bound handoff accept/reject/resolve receipts, and a
+  leased notification outbox. Existing task/run/event/evidence rows and the main
+  schema version are preserved; migrated tasks start with an empty revision-0
+  lifecycle and never acquire synthetic running or acceptance state.
+- Block task completion and managed dispatch while external execution or handoff
+  responsibility remains unresolved. Manual reconciliation can mark silent
+  executions lost and enqueue overdue notices, but never dispatches or resumes work.
+- Show next owner/action/due, execution activity separately from evidence time,
+  handoff timeout/rejection gaps, real executor model tuples, and explicit
+  deploy+smoke release requirements in the dashboard. The current notification
+  bridge remains manual: an outbox delivery record is not proof of native Codex
+  delivery, acceptance, execution start, verification, or completion.
+
 ## 0.6.0 - 2026-09-12
 
 This is the first stable release of the extracted local control-plane core, not a
