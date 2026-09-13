@@ -142,7 +142,8 @@ function lifecycleView(task, now = Date.now()) {
   const lifecycle = task && task.lifecycle;
   if (!lifecycle || typeof lifecycle !== "object") return {available: false};
   const handoffs = lifecycleArray(lifecycle.handoffs);
-  const currentHandoff = [...handoffs].reverse().find((item) => item.status !== "resolved") || handoffs.at(-1) || null;
+  const activeHandoff = [...handoffs].reverse().find((item) => item.status !== "resolved") || null;
+  const currentHandoff = activeHandoff || handoffs.at(-1) || null;
   const executions = lifecycleArray(lifecycle.external_executions);
   const status = String(lifecycle.status || "idle");
   const next = lifecycle.next_action && typeof lifecycle.next_action === "object" ? lifecycle.next_action : {};
@@ -193,11 +194,20 @@ function lifecycleView(task, now = Date.now()) {
   const evidence = lifecycleArray(task.evidence);
   const evidenceUpdatedAt = lifecycleLatest(evidence, ["created_at", "recorded_at", "updated_at"]);
   const missingItems = Array.isArray(currentHandoff?.missing_items) ? currentHandoff.missing_items.map(String) : [];
+  const hasExplicitNext = Boolean(
+    (next.owner_kind && !["none", "unknown"].includes(next.owner_kind))
+    || String(next.owner || "").trim()
+    || String(next.text || "").trim()
+    || next.due,
+  );
+  const hasCurrentExecution = ["execution_active", "execution_lost"].includes(status) && Boolean(execution);
+  const hasCurrentAction = Boolean(activeHandoff || hasCurrentExecution || hasExplicitNext);
   return {
     available: true,
     revision: lifecycle.revision,
     stage: LIFECYCLE_STAGE_LABELS[lifecycle.stage] || lifecycle.stage || "未登记",
-    meaningful: Number(lifecycle.revision || 0) > 0 || Boolean(lifecycle.stage && lifecycle.stage !== "unassigned") || Boolean(currentHandoff || execution),
+    meaningful: Boolean(lifecycle.stage && lifecycle.stage !== "unassigned") || Boolean(handoffs.length || executions.length || hasExplicitNext),
+    hasCurrentAction,
     status,
     headline,
     overdue,
@@ -229,10 +239,21 @@ function lifecyclePanel(task, compact = false) {
   if (!view.available || (compact && !view.meaningful)) return null;
   const section = el("section", `lifecycle-panel lifecycle-${view.status}${view.overdue ? " is-overdue" : ""}`);
   const head = el("div", "lifecycle-head");
-  head.append(el(compact ? "strong" : "h3", "", view.headline), el("small", "", `阶段 ${view.stage} · r${view.revision ?? "?"}`));
+  const heading = view.hasCurrentAction ? view.headline : view.meaningful
+    ? "生命周期记录已存在 · 当前无下一责任"
+    : "生命周期投影已接入 · 尚无明确记录";
+  head.append(el(compact ? "strong" : "h3", "", heading), el("small", "", `阶段 ${view.stage} · r${view.revision ?? "?"}`));
   section.append(head);
-  const next = el("p", "lifecycle-next", `下一责任：${view.nextOwner}（${view.nextOwnerKindLabel}） · ${view.nextText}`);
-  section.append(next, el("p", "lifecycle-due", `期限：${lifecycleTime(view.due)}`));
+  if (!view.meaningful) {
+    section.append(el("p", "lifecycle-empty", "尚无明确阶段、交接、外部执行或下一责任记录；不据此推断需要派发。"));
+    return section;
+  }
+  if (view.hasCurrentAction) {
+    const next = el("p", "lifecycle-next", `下一责任：${view.nextOwner}（${view.nextOwnerKindLabel}） · ${view.nextText}`);
+    section.append(next, el("p", "lifecycle-due", `期限：${lifecycleTime(view.due)}`));
+  } else {
+    section.append(el("p", "lifecycle-empty", "只有已结束执行或已关闭交接等历史记录；当前无生命周期下一责任，不覆盖任务自身的操作提示。"));
+  }
   const clocks = el("div", "lifecycle-clocks");
   clocks.append(
     el("span", "", `最近执行活动：${view.activityAt ? lifecycleTime(view.activityAt) : "未记录"} · ${view.activityText}`),
@@ -562,7 +583,7 @@ function humanAction(task) {
 function humanActionSummary(task) {
   const action = humanAction(task);
   const lifecycle = lifecycleView(task);
-  if (lifecycle.available && lifecycle.meaningful) {
+  if (lifecycle.available && lifecycle.hasCurrentAction) {
     return `生命周期下一步：${lifecycle.nextOwner} · ${lifecycle.nextText}`;
   }
   if (["user", "external"].includes(action.owner_kind)) {
@@ -1707,7 +1728,7 @@ async function openDetail(taskId, notice = "") {
   renderTaskConversation(task);
   body.replaceChildren();
   const lifecycleState = lifecycleView(task);
-  if (!lifecycleState.meaningful || humanAction(task).owner_kind !== "none") body.append(renderActionRequirement(task));
+  if (!lifecycleState.hasCurrentAction || humanAction(task).owner_kind !== "none") body.append(renderActionRequirement(task));
   if (notice) {
     const feedback = el("p", "action-feedback", notice);
     feedback.setAttribute("role", "status");

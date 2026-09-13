@@ -194,6 +194,26 @@ test("empty migrated lifecycle stays quiet on compact task cards", () => {
   const migrated = task("idle", {revision: 0, stage: "unassigned", next_action: {}});
   assert.equal(lifecyclePanel(migrated, true), null);
   assert.notEqual(lifecyclePanel(migrated, false), null);
+  const updatedWithoutLifecycleFacts = task("idle", {revision: 6, stage: "unassigned", next_action: {owner_kind: "none", owner: "", text: "", due: null}});
+  assert.equal(lifecycleView(updatedWithoutLifecycleFacts).meaningful, false);
+  assert.equal(lifecyclePanel(updatedWithoutLifecycleFacts, true), null);
+  const detail = textOf(lifecyclePanel(updatedWithoutLifecycleFacts, false));
+  assert.match(detail, /尚无明确阶段、交接、外部执行或下一责任记录/);
+  assert.doesNotMatch(detail, /责任人未登记|下一动作未登记/);
+  const historyOnly = task("idle", {
+    revision: 9, stage: "unassigned", next_action: {owner_kind: "none", owner: "", text: "", due: null},
+    external_executions: [{id: "x-done", executor: "worker-done", status: "finished", last_activity_at: "2026-09-13T10:00:00Z"}],
+    handoffs: [{id: "h-done", status: "resolved", sender: "manager", recipient: "worker-done"}],
+  });
+  const historyView = lifecycleView(historyOnly);
+  assert.equal(historyView.meaningful, true);
+  assert.equal(historyView.hasCurrentAction, false);
+  const historyDetail = textOf(lifecyclePanel(historyOnly, false));
+  assert.match(historyDetail, /当前无生命周期下一责任/);
+  assert.match(historyDetail, /worker-done/);
+  assert.match(historyDetail, /交接历史/);
+  assert.doesNotMatch(historyDetail, /责任人未登记|下一动作未登记/);
+  assert.match(source, /!lifecycleState\.hasCurrentAction/);
 });
 
 test("stage and owner kind use readable Chinese labels", () => {
