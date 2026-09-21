@@ -137,6 +137,9 @@ class ManagerEntryTests(unittest.TestCase):
         self.assertEqual(first["pinned_at"], second["pinned_at"])
         for method in ("thread/start", "thread/name/set", "thread/metadata/update"):
             self.assertEqual(self.remote.count(method), 1)
+        start_params = next(params for method, params in self.remote.calls if method == "thread/start")
+        self.assertIn("【角色｜来源会话名】", start_params["developerInstructions"])
+        self.assertIn("prepared but unsent", start_params["developerInstructions"])
         self.assertNotIn("identity", first)
         self.assertTrue(first["available"])
         self.assertIs(first["pinned"], True)
