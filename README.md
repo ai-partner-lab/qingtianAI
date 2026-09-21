@@ -11,6 +11,7 @@
 - [快速上手与启动](docs/ADOPTION.md#快速上手)
 - [接入与项目映射](docs/ADOPTION.md#接入与项目映射)
 - [Codex 大管家入口与置顶边界](docs/MANAGER-ENTRY.md)
+- [可迁移会话工作流与消息来源标注](docs/SESSION-WORKFLOW.md)
 - [任务运行与运维](docs/OPERATIONS.md)
 - [十二个协作场景：中断后只说一次继续](docs/SCENARIOS.md)
 - [迁移与版本边界](docs/MIGRATION.md)
@@ -29,6 +30,8 @@
 **中断后，不必逐个找执行者重述需求。** 在接入宿主任务读取与续接能力后，用户可以只对大管家说一次“继续”：先核实中断原因和恢复条件，找到原任务及 owner，沿用已批准方案与检查点，只续未完，再凭实际证据收尾。额度仍不足就保持阻塞；不自动充值、消费 reset、切便宜模型或恢复暂停的发布。
 
 这是宿主辅助协调的使用场景，不是公共 CLI 开箱即有的全自动跨会话恢复。重启、失联交接、外部等待、证据补齐等 12 个场景均明确区分公库原语、宿主／适配、人工协调与后续规划。[场景与步骤](docs/SCENARIOS.md) · [对外讲法](docs/BRAND.md)
+
+本轮未发布的源码增量提供 `qingtian session-workflow status` 只读接入检查和 `prepare` 消息准备：正文首行统一为 `【角色｜来源会话名】`，未知身份明确回退，审计关联与正文分开。它不发送消息、不修改 Codex 原生标题、不证明接单或执行；另一台电脑仍需本机配置与独立验收。[会话工作流](docs/SESSION-WORKFLOW.md)
 
 ![真实引擎架构](docs/diagrams/engine-overview.png)
 

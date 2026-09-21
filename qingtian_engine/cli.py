@@ -297,6 +297,25 @@ def configure_parser() -> argparse.ArgumentParser:
     status = sub.add_parser("status")
     status.add_argument("--port", type=int, default=DEFAULT_PORT)
 
+    workflow = sub.add_parser(
+        "session-workflow",
+        help="Inspect portable session capabilities or prepare an unsent message",
+    )
+    workflow_sub = workflow.add_subparsers(dest="workflow_command", required=True)
+    workflow_sub.add_parser("status", help="Read-only, data-free host capability profile")
+    prepare = workflow_sub.add_parser(
+        "prepare", help="Prepare a source-labelled JSON envelope; never deliver it"
+    )
+    message = prepare.add_mutually_exclusive_group(required=True)
+    message.add_argument("--body")
+    message.add_argument("--body-file", type=Path)
+    prepare.add_argument("--source-role")
+    prepare.add_argument("--source-session-name")
+    prepare.add_argument("--source-task-id")
+    prepare.add_argument("--handoff-id")
+    prepare.add_argument("--manifest-hash")
+    prepare.add_argument("--source-ref")
+
     project = sub.add_parser("project", help="Explicit local repository registry")
     project_sub = project.add_subparsers(dest="project_command", required=True)
     register = project_sub.add_parser("register", help="Register an authorized Git repository")
@@ -428,6 +447,48 @@ def main(argv: Optional[list] = None) -> int:
         except ProjectConfigError as exc:
             _json({"error": str(exc), "code": "invalid-project-registration"})
             return 2
+    if args.command == "session-workflow":
+        if args.workflow_command == "status":
+            from .session_workflow import configured_executable_present, session_workflow_profile
+            _json(session_workflow_profile(
+                data_dir=data_dir,
+                workspace=workspace,
+                codex_present=configured_executable_present(
+                    "codex", "QINGTIAN_CODEX_BIN", resolver=_which,
+                ),
+                git_present=bool(_which("git")),
+            ))
+            return 0
+        try:
+            from .message_identity import MAX_BODY, MAX_LABEL, prepare_message
+            if args.body_file:
+                maximum_envelope = MAX_BODY + 2 * MAX_LABEL + 4
+                with args.body_file.open("r", encoding="utf-8") as stream:
+                    body = stream.read(maximum_envelope + 1)
+                if len(body) > maximum_envelope:
+                    raise ValueError("message envelope exceeds the supported bound")
+            else:
+                body = args.body
+            result = prepare_message(
+                body,
+                source_role=args.source_role,
+                source_session_name=args.source_session_name,
+                source_task_id=args.source_task_id,
+                handoff_id=args.handoff_id,
+                manifest_hash=args.manifest_hash,
+                source_ref=args.source_ref,
+            )
+        except OSError:
+            _json({"error": "message body file is unavailable", "code": "invalid-message", "native_delivery": False})
+            return 2
+        except UnicodeError:
+            _json({"error": "message body file must be UTF-8", "code": "invalid-message", "native_delivery": False})
+            return 2
+        except ValueError as exc:
+            _json({"error": str(exc), "code": "invalid-message", "native_delivery": False})
+            return 2
+        _json(result)
+        return 0
     # Keep configured providers/registry aligned with this invocation's state,
     # including explicit --data-dir. Doctor and project list remain read-only.
     os.environ["QINGTIAN_ENGINE_HOME"] = str(data_dir)
@@ -635,7 +696,11 @@ def doctor(data_dir: Path, workspace: Path) -> Dict[str, Any]:
         policy_error = type(exc).__name__
     supported_python = (3, 11) <= sys.version_info[:2] <= (3, 14)
     supported_platform = os.name == "posix"
-    codex, git = bool(_which("codex")), bool(_which("git"))
+    from .session_workflow import configured_executable_present, session_workflow_profile
+    codex = configured_executable_present(
+        "codex", "QINGTIAN_CODEX_BIN", resolver=_which,
+    )
+    git = bool(_which("git"))
     dashboard_ready = supported_python and supported_platform and not policy_error
     return {
         "schema_version": 1, "read_only": True,
@@ -650,6 +715,10 @@ def doctor(data_dir: Path, workspace: Path) -> Dict[str, Any]:
         "credentials_checked": False, "credentials_required_to_start": False,
         "dashboard_ready": dashboard_ready,
         "execution_tools_present": codex and git,
+        "session_workflow": session_workflow_profile(
+            data_dir=data_dir, workspace=workspace,
+            codex_present=codex, git_present=git,
+        ),
         "note": "Dispatch requires separately configured model access and an explicitly registered project. "
                 "Runtime process isolation currently supports macOS/Linux (POSIX).",
     }

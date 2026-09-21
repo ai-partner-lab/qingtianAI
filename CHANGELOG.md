@@ -5,6 +5,12 @@ versioning once public releases are tagged.
 
 ## Unreleased
 
+- Add read-only `session-workflow status` and unsent `prepare` message envelopes
+  with an idempotent role/source-session prefix, explicit unknown identity,
+  separate audit correlation, and no native delivery or acceptance claims.
+  Include the same display-only source-label rules in newly submitted manager
+  instructions; existing threads are not rewritten or declared workflow-ready.
+  New-machine configuration and real host transport remain adopter-owned.
 - Add an additive lifecycle schema v1 for versioned task amendments, real external
   execution activity, manifest-bound handoff accept/reject/resolve receipts, and a
   leased notification outbox. Existing task/run/event/evidence rows and the main

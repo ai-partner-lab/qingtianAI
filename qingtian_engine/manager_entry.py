@@ -21,6 +21,7 @@ import threading
 import time
 
 from . import __version__
+from .message_identity import MESSAGE_IDENTITY_INSTRUCTIONS
 
 
 MANAGER_NAME = "\u64ce\u5929\u5927\u7ba1\u5bb6\u5165\u53e3"
@@ -41,7 +42,7 @@ MANAGER_INSTRUCTIONS = (
     "items; every accepted or rejected handoff remains open until handoff-resolve. Manual mode "
     "does not dispatch automatically, and a host transport must be verified before claiming a "
     "notification was delivered. Do not claim background execution or completed acceptance without evidence."
-)
+) + MESSAGE_IDENTITY_INSTRUCTIONS
 STATE_NAME = "manager-entry.json"
 MAX_MESSAGE = 2 * 1024 * 1024
 # CLI 0.153.4's compiled migration and isolated protocol readback establish
